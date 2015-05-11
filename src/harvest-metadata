@@ -51,8 +51,8 @@ my($pid, $errlog, $config_file_or_dir, $mdt);
 
 sub usage;
 
-use vars qw($opt_i $opt_o $opt_p $opt_d $opt_t $opt_f $opt_m $opt_s);
-usage unless getopts("i:o:p:d:t:f:m:s:");
+use vars qw($opt_i $opt_o $opt_p $opt_d $opt_t $opt_f $opt_m $opt_s $opt_r);
+usage unless getopts("i:o:p:d:t:f:m:s:r:");
 usage unless ($opt_i && $opt_o && $opt_p && $opt_t && $opt_d);
 
 my $xmldirectory = $opt_o;
@@ -106,6 +106,17 @@ sub do_harvest {
         if ($opt_s) {
             $urlsent = $url.
             "?verb=ListRecords".
+            "&metadataPrefix=".$mdt.
+            "&set=$opt_s";
+        } elsif ($opt_r) { 
+            $urlsent = $url.
+            "?verb=ListRecords".
+            "&from=".$opt_r.
+            "&metadataPrefix=".$mdt;
+        } elsif ($opt_s && $opt_r) { 
+            $urlsent = $url.
+            "?verb=ListRecords".
+            "&from=".$opt_r.
             "&metadataPrefix=".$mdt.
             "&set=$opt_s";
         } else {
@@ -571,7 +582,8 @@ XMDT
 
 sub usage {
 
-    print "$0 -i <URL> -o <dir> -p <protocol> -d <dir> -t <ownertag> -f <fpre> -m <md> -s <set>\n";
+    print "$0 -i <URL> -o <dir> -p <protocol> -d <dir> -t <ownertag> -f
+    <fpre> -m <md> -s <set> -r <fromdate>\n";
     print "\t<URL>: CSW or OAI-PMH URL to use, including name of service.\n";
     print "\t<dir>: dir to dump harvest into\n";
     print "\t<protocol>: which protocol to use (OGC-CSW or OAI-PMH)\n";
@@ -580,6 +592,7 @@ sub usage {
     print "\t<fpre>: file prefix (if necessary)\n";
     print "\t<md>: metadata prefix to use for e.g. OAI-PMH requests\n";
     print "\t<set>: OAI-PMH set specification (if needed/supported)\n";
+    print "\t<fromdate>: ISO8601 date from which records are harvested\n";
     print "\n";
     print "Only OAI-PMH works properly currently.\n";
 

@@ -18,7 +18,10 @@
 # NA
 #
 # NOTES:
-# NA
+# For details on the harvest check harvest-metadata.
+#
+# Filtering is yet not fully implemented. Currently it is hardcoded for
+# cryosphere usage...
 #
 # BUGS:
 # NA
@@ -38,9 +41,9 @@ use Getopt::Std;
 my %sites;
 sub usage;
 
-use vars qw($opt_c $opt_l);
-usage unless getopts("c:l:");
-usage unless ($opt_c | $opt_l);
+use vars qw($opt_c $opt_l $opt_f);
+usage unless getopts("c:l:f:");
+usage unless ($opt_c && $opt_l);
 
 my $harvestlog = $opt_l;
 
@@ -54,20 +57,24 @@ my($mycmd,$status);
 
 # Do the harvest and filtering
 foreach my $site (keys(%sites)) {
-    next unless $site eq "CHINARE";
     print "Harvesting from $site...\n";
     print "\tUsing $sites{$site}{address}...\n";
     print "\t\tRequesting $sites{$site}{mdkw}...\n";
     $mycmd = defined($sites{$site}{pref}) ? 
         "$mh -i $sites{$site}{address} ".
-        "-o $sites{$site}{dest} -p OAI-PMH -t GCW -d GCW -f $sites{$site}{pref}" :
+        "-o $sites{$site}{dest} -p $sites{$site}{proto} ".
+        "-t $sites{$site}{tag} -d $sites{$site}{mmdir} ".
+        "-f $sites{$site}{pref}" :
         "$mh -i $sites{$site}{address} ".
-        "-o $sites{$site}{dest} -p OAI-PMH -t GCW -d GCW";
+        "-o $sites{$site}{dest} -p $sites{$site}{proto} ".
+        "-t $sites{$site}{tag} -d $sites{$site}{mmdir}";
     $mycmd .= " -m $sites{$site}{mdkw}" if defined($sites{$site}{mdkw}); 
+    $mycmd .= " -r $opt_f" if defined($opt_f); 
 
     $status = system($mycmd);
     print "Status: ".($status/255)."\n";
 
+    # Need to be fixed...
     if (defined($sites{$site}{dest2})) {
         $mycmd = "$fr ".
         "-i $sites{$site}{dest} ".
@@ -85,7 +92,7 @@ foreach my $site (keys(%sites)) {
 my $dt = DateTime->now();
 my $active = my $deleted = 0;
 my $mypath;
-open(my $lh, ">>gcw-harvest-log.txt") or die "Can't open logfile.\n";
+open(my $lh, ">>$harvestlog") or die "Can't open logfile: $harvestlog.\n";
 foreach my $site (keys(%sites)) {
     print "Checking harvest from $site...\n";
     if ($site eq "CC") {
@@ -116,7 +123,7 @@ exit;
 sub usage {
 
     print "\n";
-    print "$0 -c <cfgfile> -l <logfile>\n";
+    print "$0 -c <cfgfile> -l <logfile> -f <fromdate>\n";
     print "\n";
 
     exit;

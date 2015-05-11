@@ -1,0 +1,13 @@
+# SAMPLE FILES
+# Sites to harvest
+# File to be used for testing
+# Øystein Godøy, METNO/FOU, 2015-05-11 
+NORMAP => 
+    address => http://normap.met.no/metamod/oai 
+    dest => /disk1/data/mdharvest/normap/unfiltered
+    dest2 => /disk1/data/mdharvest/normap/filtered
+    mdkw => dif
+    pref => normap
+    proto => OAI-PMH
+    tag => GCW
+    mmdir => GCW
