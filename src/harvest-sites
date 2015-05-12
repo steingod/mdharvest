@@ -138,8 +138,8 @@ sub createharvlist {
     my $sitename;
     while (my $line =<$fh>) {
         chomp ($line);
+        next if ($line =~ /^(\s*#*)/);
         my($key, $value) = split(/\s*=>\s*/, $line);
-        next if ($key =~ /^(\s*#)/);
         if ($key =~ /^\w/) {
             $sitename = $key;
             next;
