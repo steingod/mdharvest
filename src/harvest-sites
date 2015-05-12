@@ -49,8 +49,8 @@ my $harvestlog = $opt_l;
 
 createharvlist($opt_c, \%sites);
 
-my $mh = "harvest-metadata";
-my $fr = "filter-dif-records";
+my $mh = "./harvest-metadata";
+my $fr = "./filter-dif-records";
 my($mycmd,$status);
 
 #goto MONITOR;
