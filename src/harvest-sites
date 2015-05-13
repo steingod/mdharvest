@@ -58,6 +58,7 @@ my($mycmd,$status);
 # Do the harvest and filtering
 foreach my $site (keys(%sites)) {
     print "Harvesting from $site...\n";
+    next;
     print "\tUsing $sites{$site}{address}...\n";
     print "\t\tRequesting $sites{$site}{mdkw}...\n";
     $mycmd = defined($sites{$site}{pref}) ? 
@@ -138,7 +139,7 @@ sub createharvlist {
     my $sitename;
     while (my $line =<$fh>) {
         chomp ($line);
-        next if ($line =~ /^(\s*#*)/);
+        next if ($line =~ /^(\s*#)/);
         my($key, $value) = split(/\s*=>\s*/, $line);
         if ($key =~ /^\w/) {
             $sitename = $key;
@@ -146,6 +147,7 @@ sub createharvlist {
         }
         $key =~ s/\s*//;
         $sitesref->{$sitename}->{$key} = $value;
+        print "$key - [$sitesref->{$sitename}->{$key}]\n";
     }
 
     close($fh);
