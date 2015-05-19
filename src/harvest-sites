@@ -57,11 +57,12 @@ my($mycmd,$status);
 
 # Do the harvest and filtering
 foreach my $site (keys(%sites)) {
+    #next unless ($site eq "NIPR-ADS");
     print "Harvesting from $site...\n";
-    next;
     print "\tUsing $sites{$site}{address}...\n";
     print "\t\tRequesting $sites{$site}{mdkw}...\n";
-    $mycmd = defined($sites{$site}{pref}) ? 
+    $mycmd = (defined($sites{$site}{pref}) 
+        && length($sites{$site}{pref}) > 0) ? 
         "$mh -i $sites{$site}{address} ".
         "-o $sites{$site}{dest} -p $sites{$site}{proto} ".
         "-t $sites{$site}{tag} -d $sites{$site}{mmdir} ".
@@ -94,6 +95,8 @@ my $dt = DateTime->now();
 my $active = my $deleted = 0;
 my $mypath;
 open(my $lh, ">>$harvestlog") or die "Can't open logfile: $harvestlog.\n";
+print "#####################################################\n";
+print "Status of this harvest:\n";
 foreach my $site (keys(%sites)) {
     print "Checking harvest from $site...\n";
     if ($site eq "CC") {
@@ -113,6 +116,7 @@ foreach my $site (keys(%sites)) {
         close($fh);
     }
     print $lh "$dt $site $active $deleted\n";
+    print "$dt $site $active $deleted\n";
     $active = $deleted = 0;
 }
 close($lh);
@@ -147,7 +151,7 @@ sub createharvlist {
         }
         $key =~ s/\s*//;
         $sitesref->{$sitename}->{$key} = $value;
-        print "$key - [$sitesref->{$sitename}->{$key}]\n";
+        #print "$key - [$sitesref->{$sitename}->{$key}]\n";
     }
 
     close($fh);
