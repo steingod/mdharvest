@@ -276,13 +276,13 @@ def main():
     #records='?verb=ListRecords&metadataPrefix=gcmd'
     #baseURL = 'http://union.ndltd.org/OAI-PMH/'
     #records = '?verb=ListRecords&metadataPrefix=oai_dc'
-    baseURL = 'https://esg.prototype.ucar.edu/oai/repository.htm'
-    records = '?verb=ListRecords&metadataPrefix=dif'
-    outputDir = 'output/'
-    hProtocol = 'OAI-PMH'
+    #baseURL = 'https://esg.prototype.ucar.edu/oai/repository.htm'
+    #records = '?verb=ListRecords&metadataPrefix=dif'
+    #outputDir = 'output/'
+    #hProtocol = 'OAI-PMH'
 
-    mh = MetadataHarvester(baseURL,records, outputDir, hProtocol)
-    mh.harvest()
+    #mh = MetadataHarvester(baseURL,records, outputDir, hProtocol)
+    #mh.harvest()
 
     '''
     baseURL = 'http://metadata.bgs.ac.uk/geonetwork/srv/en/csw'
@@ -293,22 +293,25 @@ def main():
     mh2 = MetadataHarvester(baseURL,records, outputDir, hProtocol)
     mh2.harvest()
     '''
-    """
 
     with open('myValues.txt','r') as code:
         cred_tmp = code.readline()
 
     cred = cred_tmp.split(';')
     baseURL = 'https://colhub.met.no/search'
-    records = '?q=S2A*'
+    records = '?q=*'
     #records = '?q=platformname:Sentinel-1%20AND%20ingestionDate:[NOW-2DAY%20TO%20NOW]'
     #records = '?q=S2A_MSIL1C_20170116T105401_N0204_R051_T32VNM_20170116T105355'
-    #records = '?q=*'
+    #records = '?q=S1A_IW_GRDM_1SDV_20161206T060347_20161206T060447_014255_0170E4_A49B'
+    #records = '?q=S2A_MSIL1C*%20AND%20footprint:%22Intersects(POLYGON((-10.25%2071.41,%20-10.20%2070.61,%20-6.79%2070.60,%20-6.70%2071.44,%20-10.25%2071.41)))%22%20AND%20ingestiondate:[NOW-3HOUR%20TO%20NOW]'
+    #records = '?q=S2A_OPER_PRD_MSIL1C_PDMC_20160211T195349_R051_V20160211T105155_20160211T105155'
+    #records = '?q=S2B_MSIL1C_20170820T115639_N0205_R066_T35XMG_20170820T115639'
+    #records = '?q=S2B_MSIL1C*%20AND%20(%20footprint:"Intersects(POLYGON((3.04675852309276%2071.68036004870032,41.54285227309276%2071.68036004870032,41.54285227309276%2081.47413661551582,3.04675852309276%2081.47413661551582,3.04675852309276%2071.68036004870032)))"%20)%20AND%20ingestiondate:[NOW-60HOUR%20TO%20NOW-5HOUR]'
+
     outputDir = 'output/'
     hProtocol = 'OpenSearch'
     mh3 = MetadataHarvester(baseURL,records, outputDir, hProtocol,cred[0],cred[1])
     mh3.harvest()
-    """
 if __name__ == '__main__':
     main()
 
