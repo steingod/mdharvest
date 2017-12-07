@@ -21,9 +21,17 @@ import urllib as ul
 from xml.dom.minidom import parseString
 import codecs
 import sys
+import getopt
 from datetime import datetime
 import lxml.etree as ET
 
+def usage():
+    print sys.argv[0]+" [options] input"
+    print "\t-h|--help: dump this information"
+    print "\t-p|--protocol: specify the protocol to use"
+    print "\t-u|--url: specify the URL to use for the service provider"
+    print "\t-d|--destination: specify the local destination"
+    sys.exit(2)
 
 class MetadataHarvester(object):
     """ Creates metadata-harvester object with methods for harvesting and writing
@@ -269,8 +277,50 @@ class MetadataHarvester(object):
             print "There was an error with the URL request"
 
 
-def main():
+def main(argv):
     ''' Main method with examples for isolated running of script'''
+
+    # Parse command line arguments
+    try:
+        opts, args = getopt.getopt(argv,"hp:u:d:",
+                ["help","protocol","url","destination"])
+    except getopt.GetoptError:
+        usage()
+
+    pflg = uflg = dflg = False
+    for opt, arg in opts:
+        if opt == ("-h","--help"):
+            usage()
+        elif opt in ("-p","--protocol"):
+            srcprotocol = arg
+            pflg =True
+        elif opt in ("-u","--url"):
+            srcurl = arg
+            uflg =True
+        elif opt in ("-d","--destination"):
+            destination = arg
+            dflg =True
+
+    if not pflg:
+        usage()
+    elif not uflg:
+        usage()
+    elif not dflg:
+        usage()
+
+    if srcprotocol == "OAI-PMH":
+        request = "?verb=ListRecords&metadataPrefix=dif"
+    elif srcprotocol == "OGC-CSW":
+        request = "?SERVICE=CSW&VERSION=2.0.2&request=GetRecords&constraintLanguage=CQL_TEXT&typeNames=csw:Record&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd"
+    else:
+        print "Unrecognised request"
+
+    print "Request: "+srcprotocol
+
+    mh = MetadataHarvester(srcurl,request,destination,srcprotocol)
+    mh.harvest()
+
+    sys.exit()
 
     #baseURL = 'http://oai.nerc-bas.ac.uk:8080/oai/provider'
     #records='?verb=ListRecords&metadataPrefix=gcmd'
@@ -313,7 +363,7 @@ def main():
     mh3 = MetadataHarvester(baseURL,records, outputDir, hProtocol,cred[0],cred[1])
     mh3.harvest()
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])
 
 # Some TEMPORARY VALUES
 # List all recordsets: http://arcticdata.met.no/metamod/oai?verb=ListRecords&set=nmdc&metadataPrefix=dif
