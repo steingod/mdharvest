@@ -32,6 +32,7 @@ def usage():
     print sys.argv[0]+" [options] input"
     print "\t-h|--help: dump this information"
     print "\t-p|--protocol: specify the protocol to use"
+    print "\t-f|--format: specify the file format to use (only used for OAI-PMH)"
     print "\t-u|--url: specify the URL to use for the service provider"
     print "\t-d|--destination: specify the local destination"
     sys.exit(2)
@@ -285,18 +286,21 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hp:u:d:",
-                ["help","protocol","url","destination"])
+        opts, args = getopt.getopt(argv,"hp:f:u:d:",
+                ["help","protocol","format","url","destination"])
     except getopt.GetoptError:
         usage()
 
-    pflg = uflg = dflg = False
+    pflg = uflg = dflg = fflg= False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
         elif opt in ("-p","--protocol"):
             srcprotocol = arg
             pflg =True
+        elif opt in ("-f","--format"):
+            srcformat = arg
+            fflg =True
         elif opt in ("-u","--url"):
             srcurl = arg
             uflg =True
@@ -312,9 +316,11 @@ def main(argv):
         usage()
 
     if srcprotocol == "OAI-PMH":
-        request = "?verb=ListRecords&metadataPrefix=dif"
+        request = "?verb=ListRecords&metadataPrefix="+format
     elif srcprotocol == "OGC-CSW":
         request = "?SERVICE=CSW&VERSION=2.0.2&request=GetRecords&constraintLanguage=CQL_TEXT&typeNames=csw:Record&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd"
+    elif srcprotocol == "OpenSearch":
+        request = "?q=*"
     else:
         print "Unrecognised request"
 
@@ -325,27 +331,6 @@ def main(argv):
 
     sys.exit()
 
-    #baseURL = 'http://oai.nerc-bas.ac.uk:8080/oai/provider'
-    #records='?verb=ListRecords&metadataPrefix=gcmd'
-    #baseURL = 'http://union.ndltd.org/OAI-PMH/'
-    #records = '?verb=ListRecords&metadataPrefix=oai_dc'
-    #baseURL = 'https://esg.prototype.ucar.edu/oai/repository.htm'
-    #records = '?verb=ListRecords&metadataPrefix=dif'
-    #outputDir = 'output/'
-    #hProtocol = 'OAI-PMH'
-
-    #mh = MetadataHarvester(baseURL,records, outputDir, hProtocol)
-    #mh.harvest()
-
-    '''
-    baseURL = 'http://metadata.bgs.ac.uk/geonetwork/srv/en/csw'
-    records = '?SERVICE=CSW&VERSION=2.0.2&request=GetRecords&constraintLanguage=CQL_TEXT&typeNames=csw:Record&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd'
-    outputDir = 'output/'
-    hProtocol = 'OGC-CSW'
-
-    mh2 = MetadataHarvester(baseURL,records, outputDir, hProtocol)
-    mh2.harvest()
-    '''
 
     with open('myValues.txt','r') as code:
         cred_tmp = code.readline()
@@ -368,12 +353,3 @@ def main(argv):
 if __name__ == '__main__':
     main(sys.argv[1:])
 
-# Some TEMPORARY VALUES
-# List all recordsets: http://arcticdata.met.no/metamod/oai?verb=ListRecords&set=nmdc&metadataPrefix=dif
-# List identifier: http://arcticdata.met.no/metamod/oai?verb=GetRecord&identifier=urn:x-wmo:md:no.met.arcticdata.test3::ADC_svim-oha-monthly&metadataPrefix=dif
-# Recordset with resumptionToken: http://union.ndltd.org/OAI-PMH/?verb=ListRecords&metadataPrefix=oai_dc
-# Recordset with DIF elements and resumptionToken (Slow server..): http://ws.pangaea.de/oai/provider?verb=ListRecords&metadataPrefix=dif
-# Recordset with DIF elements and resumptionToken: https://esg.prototype.ucar.edu/oai/repository.htm?verb=ListRecords&metadataPrefix=dif
-# Recordset with gcmd(DIF) elements: http://oai.nerc-bas.ac.uk:8080/oai/provider?verb=ListRecords&metadataPrefix=gcmd
-# OGC-CSW recordset: http://metadata.bgs.ac.uk/geonetwork/srv/en/csw?SERVICE=CSW&VERSION=2.0.2&request=GetRecords&constraintLanguage=CQL_TEXT&typeNames=csw:Record&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd
-# OpenSearch from sentinel scihub: https://scihub.copernicus.eu/dhus/search?q=S2A*
