@@ -1,13 +1,16 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
 """ Script for harvesting metadata
     Inspired by:
         - harvest-metadata from https://github.com/steingod/mdharvest/tree/master/src
         - code from http://lightonphiri.org/blog/metadata-harvesting-via-oai-pmh-using-python
 
 AUTHOR: Trygve Halsne, 25.01.2017
+UPDATED: Øystein Godøy, METNO/FOU, 2017-12-12 
 
 USAGE:
-    - Currently initiaded with internal methods in class
+    - See usage
+    - Currently initiated with internal methods in class
 
 COMMENTS (for further development):
     - Implement it object oriented by means of classes
