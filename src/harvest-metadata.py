@@ -204,7 +204,7 @@ class MetadataHarvester(object):
 
     def oaipmh_writeDIFtoFile(self,dom):
         """ Write DIF elements in dom to file """
-        print "Writing DIF elements to disk... "
+        print "Writing OAI-PMH DIF elements to disk... "
 
         record_elements = dom.getElementsByTagName('record')
         size_dif = dom.getElementsByTagName('DIF').length
@@ -226,8 +226,8 @@ class MetadataHarvester(object):
                     self.write_to_file(dif,fname)
                     counter += 1
                 # Temporary break for testing
-                if counter == 10:
-                    break;
+                #if counter == 10:
+                #    break;
         else:
             print "\trecords did not contain DIF elements"
 
@@ -247,7 +247,7 @@ class MetadataHarvester(object):
         """ Function for harvesting content from URL."""
         try:
             if not credentials:
-                file = ul2.urlopen(URL,timeout=40) # Timeout depends on user
+                file = ul2.urlopen(URL,timeout=60) # Timeout depends on user
                 data = file.read()
                 file.close()
                 return parseString(data)
@@ -263,9 +263,10 @@ class MetadataHarvester(object):
                   "Could not open or parse content from: \n\t %s" % URL)
 
     def oaipmh_resumptionToken(self,URL):
-        """ Function for handeling resumptionToken in OAI-PMH"""
+        """ Function for handling resumptionToken in OAI-PMH"""
+        print "Now in resumptionToken..."
         try:
-            file = ul2.urlopen(URL, timeout=40)
+            file = ul2.urlopen(URL, timeout=60)
             data = file.read()
             file.close()
             dom = parseString(data)
@@ -316,7 +317,7 @@ def main(argv):
         usage()
 
     if srcprotocol == "OAI-PMH":
-        request = "?verb=ListRecords&metadataPrefix="+format
+        request = "?verb=ListRecords&metadataPrefix="+srcformat
     elif srcprotocol == "OGC-CSW":
         request = "?SERVICE=CSW&VERSION=2.0.2&request=GetRecords&constraintLanguage=CQL_TEXT&typeNames=csw:Record&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd"
     elif srcprotocol == "OpenSearch":
