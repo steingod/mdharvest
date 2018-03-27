@@ -27,7 +27,6 @@ def usage():
     print "\t-s|--style: specify the stylesheet to use"
     sys.exit(2)
 
-
 def main(argv):
     # This is the main method
 
@@ -64,29 +63,40 @@ def main(argv):
         myxslt = ET.parse(stylesheet)
     except ET.error:
         print ET.error
+        sys.exit(1)
+    mytransform = ET.XSLT(myxslt)
 
     # Find files to process
     try:
         myfiles = os.listdir(indir)
     except os.error:
         print os.error
+        sys.exit(1)
     
     # Check that the destination exists, create if not
-    if not os.path.exists(indir):
+    if not os.path.exists(outdir):
+        print "Output directory does not exist, trying to create it..."
         try:
             os.makedirs(outdir)
         except OSError as e:
             print e
+            sys.exit(1)
 
     # Process files
-    for file in myfiles:
-        if file.endswith(".xml"):
-            print file
+    i=0
+    s = "/"
+    for myfile in myfiles:
+        if myfile.endswith(".xml"):
+            print i, myfile
+            i += 1
+            inxml = ET.parse(s.join((indir,myfile)))
+            newxml = mytransform(inxml)
+            output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
+            output.write(ET.tostring(newxml, pretty_print=True))
+            output.close()
+            sys.exit(1)
 
     sys.exit(0)
 
-    dom = ET.parse(xml_filename)
-xslt = ET.parse(xsl_filename)
-transform = ET.XSLT(xslt)
-newdom = transform(dom)
-print(ET.tostring(newdom, pretty_print=True))
+if __name__ == '__main__':
+    main(sys.argv[1:])
