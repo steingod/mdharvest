@@ -5,8 +5,11 @@
         - harvest-metadata from https://github.com/steingod/mdharvest/tree/master/src
         - code from http://lightonphiri.org/blog/metadata-harvesting-via-oai-pmh-using-python
 
-AUTHOR: Trygve Halsne, 25.01.2017
-UPDATED: Øystein Godøy, METNO/FOU, 2017-12-12 
+AUTHOR:     Trygve Halsne, 25.01.2017
+UPDATED:    Øystein Godøy, METNO/FOU, 2017-12-12 
+            Multiple..
+            Øystein Godøy, METNO/FOU, 2018-03-27 
+                First version suitable for regular use for OAI-PMH.
 
 USAGE:
     - See usage
