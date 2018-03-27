@@ -32,6 +32,7 @@ def usage():
     print sys.argv[0]+" [options] input"
     print "\t-h|--help: dump this information"
     print "\t-p|--protocol: specify the protocol to use"
+    print "\t-s|--set: specify set to harvest (only used for OAI-PMH)"
     print "\t-f|--format: specify the file format to use (only used for OAI-PMH)"
     print "\t-u|--url: specify the URL to use for the service provider"
     print "\t-d|--destination: specify the local destination"
@@ -198,8 +199,8 @@ class MetadataHarvester(object):
                     self.write_to_file(md_element,fname)
                     counter += 1
                 # Temporary break for testing
-                if counter == 3:
-                    break;
+                #if counter == 3:
+                #    break;
 
 
     def oaipmh_writeDIFtoFile(self,dom):
@@ -264,7 +265,7 @@ class MetadataHarvester(object):
 
     def oaipmh_resumptionToken(self,URL):
         """ Function for handling resumptionToken in OAI-PMH"""
-        print "Now in resumptionToken..."
+        #print "Now in resumptionToken..."
         try:
             file = ul2.urlopen(URL, timeout=60)
             data = file.read()
@@ -287,18 +288,21 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hp:f:u:d:",
-                ["help","protocol","format","url","destination"])
+        opts, args = getopt.getopt(argv,"hp:f:s:u:d:",
+                ["help","protocol","format","set","url","destination"])
     except getopt.GetoptError:
         usage()
 
-    pflg = uflg = dflg = fflg= False
+    pflg = uflg = dflg = fflg = sflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
         elif opt in ("-p","--protocol"):
             srcprotocol = arg
             pflg =True
+        elif opt in ("-s","--set"):
+            oaiset = arg
+            sflg =True
         elif opt in ("-f","--format"):
             srcformat = arg
             fflg =True
@@ -317,7 +321,10 @@ def main(argv):
         usage()
 
     if srcprotocol == "OAI-PMH":
-        request = "?verb=ListRecords&metadataPrefix="+srcformat
+        if sflg:
+            request = "?verb=ListRecords&metadataPrefix="+srcformat+"&set="+oaiset
+        else:
+            request = "?verb=ListRecords&metadataPrefix="+srcformat
     elif srcprotocol == "OGC-CSW":
         request = "?SERVICE=CSW&VERSION=2.0.2&request=GetRecords&constraintLanguage=CQL_TEXT&typeNames=csw:Record&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd"
     elif srcprotocol == "OpenSearch":
