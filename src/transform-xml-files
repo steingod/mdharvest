@@ -5,7 +5,7 @@
 #
 # PURPOSE:
 # To find XML files in a directory and transform these using XSLT to a
-# nother XML format. Typically this is used to transform DIF to MM2 or
+# nother XML format. Typically this is used to transform DIF to MM2, MMD or
 # similar.
 #
 # REQUIREMENTS:
@@ -27,10 +27,7 @@
 # Øystein Godøy, METNO/FOU, 2013-07-04 
 #
 # MODIFIED:
-# NA
-#
-# CVS_ID:
-# $Id: $
+# Øystein Godøy, METNO/FOU, 2018-03-27 
 #
 
 use strict;
