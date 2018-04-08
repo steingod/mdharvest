@@ -14,6 +14,7 @@ NOTES:
     - Not working...
     - Once working for bounding box, create functions for specific
       purposes...
+    - Only valid in the Northern hemisphere as of now.
 
 """
 
@@ -36,38 +37,57 @@ class CheckMMD():
     def __init__(self, mmd_file):
         self.mmd_file = mmd_file
 
-    def check_bounding_box(self,elements,root):
+    def check_bounding_box(self,elements,root,bbox):
         if len(elements) > 1:
             print "Found more than one element, not handling this now..."
             return sys.exit(2)
-        print ET.tostring(elements[0],pretty_print=True)
+        #print ET.tostring(elements[0],pretty_print=True)
+        # Decode bounding box from XML
+        thisbb = []
         for el in elements:
             northernmost = float(el.find('mmd:north',namespaces=root.nsmap).text)
+            thisbb.append(northernmost)
             easternmost = float(el.find('mmd:east',namespaces=root.nsmap).text)
+            thisbb.append(easternmost)
             southernmost = float(el.find('mmd:south',namespaces=root.nsmap).text)
+            thisbb.append(southernmost)
             westernmost = float(el.find('mmd:west',namespaces=root.nsmap).text)
-            print "North: ",northernmost
-            print "East: ",easternmost
-            print "South: ",southernmost
-            print "West: ",westernmost
-            
-        print "End of check_bounding_box..."
+            thisbb.append(westernmost)
 
-    def check_mmd(self):
+        # Check bounding box
+        # Lists are ordered N, E, S, W
+        print "This bounding box",thisbb
+        print "Reference bounding box",bbox
+        latmatch = False
+        lonmatch = False
+        if (thisbb[0] < bbox[0]) and (thisbb[2] > bbox[2]):
+            latmatch = True
+            print "Latitude match"
+        if (thisbb[1] < bbox[1]) and (thisbb[3] > bbox[3]):
+            lonmatch = True
+            print "Longitude match"
+
+        if (latmatch and lonmatch):
+            return True
+        else:
+            return False
+            
+
+    def check_mmd(self, bbox):
         mmd_file = self.mmd_file
         tree = ET.ElementTree(file=mmd_file)
         root = tree.getroot()
         #print ET.tostring(root)
+
         # Check bounding box
         elements = tree.findall('.//mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap)
         if not elements:
             print "Did not find any bounding box of type rectangular..."
             return False
-        if self.check_bounding_box(elements,root):
-            print "This was a success"
+        if self.check_bounding_box(elements,root,bbox):
+            return True
         else:
-            print "This was a failure"
-        return True
+            return False
 
 def main(argv):
     # This is the main method
@@ -108,8 +128,10 @@ def main(argv):
     # Provided as comma separated list (S,W,N,E)
     if bflg:
         bbox = bounding.split(",")
-        print bounding
-        print bbox
+        #print bounding
+        #print bbox
+        bounding = [float(i) for i in bbox]
+        #print bounding
 
 
     # Find files to process
@@ -137,12 +159,10 @@ def main(argv):
             i += 1
             #inxml = ET.parse(s.join((indir,myfile)))
             check_file = CheckMMD(s.join((indir,myfile)))
-            if check_file.check_mmd():
+            if check_file.check_mmd(bounding):
                 print "Success"
             else:
                 print "Failure"
-
-            sys.exit() # while testing
 
 
 if __name__ == '__main__':
