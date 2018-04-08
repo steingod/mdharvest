@@ -12,6 +12,8 @@ UPDATED:
 
 NOTES:
     - Not working...
+    - Once working for bounding box, create functions for specific
+      purposes...
 
 """
 
@@ -26,9 +28,40 @@ def usage():
     print "\t-h|--help: dump this information"
     print "\t-i|--indir: specify where to get input"
     print "\t-o|--outdir: specify where to put results"
-    print "\t-s|--style: specify the stylesheet to use"
+    print "\t-p|--parameters: specify parameters to extract"
+    print "\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list"
     sys.exit(2)
 
+class CheckMMD():
+    def __init__(self, mmd_file):
+        self.mmd_file = mmd_file
+
+    #def check_bounding_box(self, ):
+
+    def check_mmd(self):
+        mmd_file = self.mmd_file
+        tree = ET.ElementTree(file=mmd_file)
+        root = tree.getroot()
+        elements = tree.findall('.//mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap)
+        if not elements:
+            print "Did not find any bounding box of type rectangular..."
+            return False
+        if len(elements) > 1:
+            print "Found more than one element, not handling this now..."
+            return sys.exit(2)
+        print ET.tostring(elements[0],pretty_print=True)
+        for el in elements:
+            northernmost = float(el.find('mmd:north',namespaces=root.nsmap).text)
+            easternmost = float(el.find('mmd:east',namespaces=root.nsmap).text)
+            southernmost = float(el.find('mmd:south',namespaces=root.nsmap).text)
+            westernmost = float(el.find('mmd:west',namespaces=root.nsmap).text)
+            print "North: ",northernmost
+            print "East: ",easternmost
+            print "South: ",southernmost
+            print "West: ",westernmost
+            
+        print "End of loop..."
+        return True
 
 def main(argv):
     # This is the main method
@@ -96,7 +129,14 @@ def main(argv):
         if myfile.endswith(".xml"):
             print i, myfile
             i += 1
-            inxml = ET.parse(s.join((indir,myfile)))
+            #inxml = ET.parse(s.join((indir,myfile)))
+            check_file = CheckMMD(s.join((indir,myfile)))
+            if check_file.check_mmd():
+                print "Success"
+            else:
+                print "Failure"
+
+            sys.exit() # while testing
 
 
 if __name__ == '__main__':
