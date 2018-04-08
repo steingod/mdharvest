@@ -36,16 +36,7 @@ class CheckMMD():
     def __init__(self, mmd_file):
         self.mmd_file = mmd_file
 
-    #def check_bounding_box(self, ):
-
-    def check_mmd(self):
-        mmd_file = self.mmd_file
-        tree = ET.ElementTree(file=mmd_file)
-        root = tree.getroot()
-        elements = tree.findall('.//mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap)
-        if not elements:
-            print "Did not find any bounding box of type rectangular..."
-            return False
+    def check_bounding_box(self,elements,root):
         if len(elements) > 1:
             print "Found more than one element, not handling this now..."
             return sys.exit(2)
@@ -60,7 +51,22 @@ class CheckMMD():
             print "South: ",southernmost
             print "West: ",westernmost
             
-        print "End of loop..."
+        print "End of check_bounding_box..."
+
+    def check_mmd(self):
+        mmd_file = self.mmd_file
+        tree = ET.ElementTree(file=mmd_file)
+        root = tree.getroot()
+        #print ET.tostring(root)
+        # Check bounding box
+        elements = tree.findall('.//mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap)
+        if not elements:
+            print "Did not find any bounding box of type rectangular..."
+            return False
+        if self.check_bounding_box(elements,root):
+            print "This was a success"
+        else:
+            print "This was a failure"
         return True
 
 def main(argv):
