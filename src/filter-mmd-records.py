@@ -150,7 +150,8 @@ def main(argv):
             print e
             sys.exit(1)
 
-    # Process files
+    # Process files, dump valid filenames to file
+    f = open("tmpfile.txt","w+")
     i=0
     s = "/"
     for myfile in myfiles:
@@ -161,8 +162,10 @@ def main(argv):
             check_file = CheckMMD(s.join((indir,myfile)))
             if check_file.check_mmd(bounding):
                 print "Success"
+                f.write(s.join((indir,myfile))+"\n")
             else:
                 print "Failure"
+    f.close()
 
 
 if __name__ == '__main__':
