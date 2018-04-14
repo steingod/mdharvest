@@ -10,16 +10,14 @@ AUTHOR:
     Øystein Godøy, METNO/FOU, 2018-03-27 
 
 UPDATED:
+    Øystein Godøy, METNO/FOU, 2018-04-15 
+        Conversion of MM2, two level datasets and creation of identifiers
+        are now working.
     Øystein Godøy, METNO/FOU, 2018-04-14 
         Support for MM2 conversion (including information from XMD)
 
 NOTES:
-    - Is it possible to make this run on MM2 files and to generate UUID
-      while doing this if this is not present in input (useful for MM2)?
-      This would require extraction of the ast metadata update.
     - Add support for processing a single file.
-    - Add support for conversion of level 2 file (reference the UUID of
-      the parent).
 
 """
 
@@ -37,6 +35,7 @@ def usage():
     print "\t-o|--outdir: specify where to put results"
     print "\t-s|--style: specify the stylesheet to use"
     print "\t-x|--xmd: input is MM2 with XMD files"
+    print "\t-p|--parent: UUID of parent dataset"
     sys.exit(2)
 
 def create_uuid(infile,lastupdate):
@@ -50,12 +49,12 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hi:o:s:x",
-                ["help","indir","outdir","style","xmd"])
+        opts, args = getopt.getopt(argv,"hi:o:s:xp:",
+                ["help","indir","outdir","style","xmd","parent"])
     except getopt.GetoptError:
         usage()
 
-    iflg = oflg = sflg = xflg = False
+    iflg = oflg = sflg = xflg = pflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
@@ -70,6 +69,9 @@ def main(argv):
             sflg = True
         elif opt in ("-x","--xmd"):
             xflg = True
+        elif opt in ("-p","--parent"):
+            parentUUID = arg
+            pflg = True
 
     if not iflg:
         usage()
@@ -124,11 +126,20 @@ def main(argv):
             else:
                 print i, myfile
             i += 1
-            #inxml = ET.parse(s.join((indir,myfile)))
             inxml = ET.parse(xmlfile)
-            newxml = mytransform(inxml,
-                    xmd=ET.XSLT.strparam(xmdfile),
-                    mmdid=ET.XSLT.strparam(str(myuuid)))
+            if xflg:
+                if pflg:
+                    newxml = mytransform(inxml,
+                        xmd=ET.XSLT.strparam(xmdfile),
+                        mmdid=ET.XSLT.strparam(str(myuuid)),
+                        parentDataset=ET.XSLT.strparam(str(parentUUID)))
+                else:
+                    newxml = mytransform(inxml,
+                        xmd=ET.XSLT.strparam(xmdfile),
+                        mmdid=ET.XSLT.strparam(str(myuuid)))
+            else:
+                newxml = mytransform(inxml,
+                    xmd=ET.XSLT.strparam(xmdfile))
             output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
             output.write(ET.tostring(newxml, pretty_print=True))
             output.close()
