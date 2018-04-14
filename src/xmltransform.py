@@ -12,12 +12,12 @@ AUTHOR:
 UPDATED:
     Øystein Godøy, METNO/FOU, 2018-04-15 
         Conversion of MM2, two level datasets and creation of identifiers
-        are now working.
+        are now working. Also processing only one file.
     Øystein Godøy, METNO/FOU, 2018-04-14 
         Support for MM2 conversion (including information from XMD)
 
 NOTES:
-    - Add support for processing a single file.
+    - NA
 
 """
 
@@ -36,6 +36,7 @@ def usage():
     print "\t-s|--style: specify the stylesheet to use"
     print "\t-x|--xmd: input is MM2 with XMD files"
     print "\t-p|--parent: UUID of parent dataset"
+    print "\t-f|--file: treat input as file, not directory"
     sys.exit(2)
 
 def create_uuid(infile,lastupdate):
@@ -49,12 +50,12 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hi:o:s:xp:",
-                ["help","indir","outdir","style","xmd","parent"])
+        opts, args = getopt.getopt(argv,"hi:o:s:xp:f",
+                ["help","indir","outdir","style","xmd","parent","file"])
     except getopt.GetoptError:
         usage()
 
-    iflg = oflg = sflg = xflg = pflg = False
+    iflg = oflg = sflg = xflg = pflg = fflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
@@ -72,6 +73,8 @@ def main(argv):
         elif opt in ("-p","--parent"):
             parentUUID = arg
             pflg = True
+        elif opt in ("-f","--file"):
+            fflg = True
 
     if not iflg:
         usage()
@@ -89,11 +92,18 @@ def main(argv):
     mytransform = ET.XSLT(myxslt)
 
     # Find files to process
-    try:
-        myfiles = os.listdir(indir)
-    except os.error:
-        print os.error
-        sys.exit(1)
+    if fflg:
+        if not os.path.isfile(indir):
+            print "This is not a file"
+            sys.exit(2)
+        myfiles = [os.path.basename(indir)]
+        indir = os.path.dirname(indir)
+    else:
+        try:
+            myfiles = os.listdir(indir)
+        except os.error:
+            print os.error
+            sys.exit(1)
     
     # Check that the destination exists, create if not
     if not os.path.exists(outdir):
@@ -109,6 +119,7 @@ def main(argv):
     s = "/"
     for myfile in myfiles:
         xmlfile = s.join((indir,myfile))
+        print "Processing",xmlfile, i
         if myfile.endswith(".xml"):
             if xflg:
                 xmdfile = s.join((indir,myfile.replace(".xml",".xmd")))
@@ -121,10 +132,6 @@ def main(argv):
                 collection = xmd.xpath("//ds:info/@ownertag", \
                         namespaces={'ds':'http://www.met.no/schema/metamod/dataset'})[0]
                 myuuid = create_uuid(xmlfile,xmdlastupdate)
-                #print i, myfile, xmdfile, xmdlastupdate, collection, myuuid
-                print i, myfile, xmdlastupdate, collection, myuuid
-            else:
-                print i, myfile
             i += 1
             inxml = ET.parse(xmlfile)
             if xflg:
@@ -143,7 +150,6 @@ def main(argv):
             output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
             output.write(ET.tostring(newxml, pretty_print=True))
             output.close()
-            break # while testing
 
     sys.exit(0)
 
