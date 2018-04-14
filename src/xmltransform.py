@@ -124,10 +124,11 @@ def main(argv):
             else:
                 print i, myfile
             i += 1
-            continue # while testing
             #inxml = ET.parse(s.join((indir,myfile)))
             inxml = ET.parse(xmlfile)
-            newxml = mytransform(inxml,xmd=ET.XSLT.strparam(xmdfile))
+            newxml = mytransform(inxml,
+                    xmd=ET.XSLT.strparam(xmdfile),
+                    mmdid=ET.XSLT.strparam(str(myuuid)))
             output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
             output.write(ET.tostring(newxml, pretty_print=True))
             output.close()
