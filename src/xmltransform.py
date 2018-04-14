@@ -15,9 +15,11 @@ UPDATED:
 
 NOTES:
     - Is it possible to make this run on MM2 files and to generate UUID
-      while doing this?
-    - How can xsltproc stringparam be included in the process?
-        - Yes apparently, see http://lxml.de/xpathxslt.html#xslt
+      while doing this if this is not present in input (useful for MM2)?
+      This would require extraction of the ast metadata update.
+    - Add support for processing a single file.
+    - Add support for conversion of level 2 file (reference the UUID of
+      the parent).
 
 """
 
@@ -100,7 +102,12 @@ def main(argv):
         if myfile.endswith(".xml"):
             if xflg:
                 xmdfile = s.join((indir,myfile.replace(".xml",".xmd")))
-                print i, myfile, xmdfile
+                xmd = ET.parse(xmdfile)
+                xmdlastupdate = xmd.xpath("//ds:info/@datestamp", \
+                        namespaces={'ds':'http://www.met.no/schema/metamod/dataset'})[0]
+                collection = xmd.xpath("//ds:info/@ownertag", \
+                        namespaces={'ds':'http://www.met.no/schema/metamod/dataset'})[0]
+                print i, myfile, xmdfile, xmdlastupdate, collection
             else:
                 print i, myfile
             i += 1
