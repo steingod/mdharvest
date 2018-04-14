@@ -26,6 +26,7 @@ NOTES:
 import sys
 import os
 import getopt
+import uuid
 import lxml.etree as ET
 import codecs
 
@@ -37,6 +38,12 @@ def usage():
     print "\t-s|--style: specify the stylesheet to use"
     print "\t-x|--xmd: input is MM2 with XMD files"
     sys.exit(2)
+
+def create_uuid(infile,lastupdate):
+    string2use = "https://arcticdata.met.no/ds/"+os.path.basename(infile)+"-"
+    string2use += lastupdate
+    myuuid = uuid.uuid5(uuid.NAMESPACE_URL,string2use)
+    return(myuuid)
 
 def main(argv):
     # This is the main method
@@ -99,19 +106,27 @@ def main(argv):
     i=0
     s = "/"
     for myfile in myfiles:
+        xmlfile = s.join((indir,myfile))
         if myfile.endswith(".xml"):
             if xflg:
                 xmdfile = s.join((indir,myfile.replace(".xml",".xmd")))
+                if not os.path.isfile(xmdfile):
+                    print xmdfile, "not found"
+                    continue
                 xmd = ET.parse(xmdfile)
                 xmdlastupdate = xmd.xpath("//ds:info/@datestamp", \
                         namespaces={'ds':'http://www.met.no/schema/metamod/dataset'})[0]
                 collection = xmd.xpath("//ds:info/@ownertag", \
                         namespaces={'ds':'http://www.met.no/schema/metamod/dataset'})[0]
-                print i, myfile, xmdfile, xmdlastupdate, collection
+                myuuid = create_uuid(xmlfile,xmdlastupdate)
+                #print i, myfile, xmdfile, xmdlastupdate, collection, myuuid
+                print i, myfile, xmdlastupdate, collection, myuuid
             else:
                 print i, myfile
             i += 1
-            inxml = ET.parse(s.join((indir,myfile)))
+            continue # while testing
+            #inxml = ET.parse(s.join((indir,myfile)))
+            inxml = ET.parse(xmlfile)
             newxml = mytransform(inxml,xmd=ET.XSLT.strparam(xmdfile))
             output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
             output.write(ET.tostring(newxml, pretty_print=True))
