@@ -10,6 +10,14 @@ AUTHOR:
     Øystein Godøy, METNO/FOU, 2018-03-27 
 
 UPDATED:
+    Øystein Godøy, METNO/FOU, 2018-04-14 
+        Support for MM2 conversion (including information from XMD)
+
+NOTES:
+    - Is it possible to make this run on MM2 files and to generate UUID
+      while doing this?
+    - How can xsltproc stringparam be included in the process?
+        - Yes apparently, see http://lxml.de/xpathxslt.html#xslt
 
 """
 
@@ -25,6 +33,7 @@ def usage():
     print "\t-i|--indir: specify where to get input"
     print "\t-o|--outdir: specify where to put results"
     print "\t-s|--style: specify the stylesheet to use"
+    print "\t-x|--xmd: input is MM2 with XMD files"
     sys.exit(2)
 
 def main(argv):
@@ -32,24 +41,26 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hi:o:s:",
-                ["help","indir","outdir","style"])
+        opts, args = getopt.getopt(argv,"hi:o:s:x",
+                ["help","indir","outdir","style","xmd"])
     except getopt.GetoptError:
         usage()
 
-    iflg = oflg = sflg = False
+    iflg = oflg = sflg = xflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
         elif opt in ("-i","--indir"):
             indir = arg
-            iflg =True
+            iflg = True
         elif opt in ("-o","--outdir"):
             outdir = arg
-            oflg =True
+            oflg = True
         elif opt in ("-s","--style"):
             stylesheet = arg
-            sflg =True
+            sflg = True
+        elif opt in ("-x","--xmd"):
+            xflg = True
 
     if not iflg:
         usage()
@@ -87,14 +98,18 @@ def main(argv):
     s = "/"
     for myfile in myfiles:
         if myfile.endswith(".xml"):
-            print i, myfile
+            if xflg:
+                xmdfile = s.join((indir,myfile.replace(".xml",".xmd")))
+                print i, myfile, xmdfile
+            else:
+                print i, myfile
             i += 1
             inxml = ET.parse(s.join((indir,myfile)))
-            newxml = mytransform(inxml)
+            newxml = mytransform(inxml,xmd=ET.XSLT.strparam(xmdfile))
             output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
             output.write(ET.tostring(newxml, pretty_print=True))
             output.close()
-            sys.exit(1)
+            break # while testing
 
     sys.exit(0)
 
