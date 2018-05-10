@@ -174,7 +174,7 @@ class MetadataHarvester(object):
 
         else:
             print '\nProtocol %s is not accepted.' % hProtocol
-            exit()
+            sys.exit(3)
 
     def openSearch_writeENTRYtoFile(self,dom):
         """ Write OpenSearch ENTRY elements in fom to file"""
