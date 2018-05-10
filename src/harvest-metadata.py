@@ -22,11 +22,13 @@ USAGE:
 COMMENTS (for further development):
     - Rewrite to lxml started for OpenSearch
     - Rename dom elements when completed, and remove DOM requirement...
+    - Rename file to avoid using dash...
+    - Add ISO19115 support to OAI-PMH
 """
 
 import urllib2 as ul2
 import urllib as ul
-from xml.dom.minidom import parseString
+from xml.dom.minidom import parseString # To be removed
 import codecs
 import sys
 import os
@@ -74,6 +76,10 @@ class MetadataHarvester(object):
             dom = self.harvestContent(getRecordsURL)
             if dom != None:
                 self.oaipmh_writeDIFtoFile(dom)
+            else:
+                print "Server is not responding properly"
+                raise IOError("Server to harvest is not responding properly")
+                return(0)
             pageCounter = 1
             # Check for resumptionToken
             resumptionToken = dom.find(
@@ -111,6 +117,10 @@ class MetadataHarvester(object):
             print "Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol)
             start_time = datetime.now()
             dom = self.harvestContent(getRecordsURL)
+            if dom == None:
+                print "Server is not responding properly"
+                raise IOError("Server to harvest is not responding properly")
+                return(0)
             cswHeader = dom.find('csw:SearchResults',
                     namespaces={'csw':'http://www.opengis.net/cat/csw/2.0.2'})
             if cswHeader == None:
@@ -174,7 +184,9 @@ class MetadataHarvester(object):
 
         else:
             print '\nProtocol %s is not accepted.' % hProtocol
-            sys.exit(3)
+            raise IOError("Protocol is not accepted")
+
+        return(self.numRecHarv)
 
     def openSearch_writeENTRYtoFile(self,dom):
         """ Write OpenSearch ENTRY elements in fom to file"""
@@ -338,7 +350,6 @@ class MetadataHarvester(object):
                 #data = file.read()
                 data = ET.parse(file)
                 file.close()
-                #return parseString(data)
                 return data
             else:
                 # Not working with lxml
