@@ -10,16 +10,18 @@ UPDATED:    Øystein Godøy, METNO/FOU, 2017-12-12
             Multiple..
             Øystein Godøy, METNO/FOU, 2018-03-27 
                 First version suitable for regular use for OAI-PMH.
+            Øystein Godøy, METNO/FOU, 2018-05-09 
+                Working version for OAI-PMH with lxml
+            Øystein Godøy, METNO/FOU, 2018-05-10 
+                Working version with OGC CSW as well
 
 USAGE:
     - See usage
     - Currently initiated with internal methods in class
 
 COMMENTS (for further development):
-    - Implement it object oriented by means of classes
-    - Implement hprotocol: OGC-CSW, OpenSearch, ISO 19115
-    - Does OGC-CSW metadata have some kind of resumptionToken analog?
-    - When writing OAI-PMH records: Check if record contains header and has status=deleted..
+    - Rewrite to lxml started for OpenSearch
+    - Rename dom elements when completed, and remove DOM requirement...
 """
 
 import urllib2 as ul2
@@ -27,6 +29,7 @@ import urllib as ul
 from xml.dom.minidom import parseString
 import codecs
 import sys
+import os
 import getopt
 from datetime import datetime
 import lxml.etree as ET
@@ -60,21 +63,28 @@ class MetadataHarvester(object):
         baseURL, records, hProtocol, uname, pw = self.baseURL, self.records, self.hProtocol, self.username, self.pw
 
         if hProtocol == 'OAI-PMH':
-            # Could/should be more sophistiated by means of deciding url properties
+            # Could/should be more sophistiated by means of deciding url
+            # properties
             getRecordsURL = str(baseURL + records)
             print "Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol)
             start_time = datetime.now()
 
             # Initial phase
-            resumptionToken = self.oaipmh_resumptionToken(getRecordsURL)
             dom = self.harvestContent(getRecordsURL)
             if dom != None:
                 self.oaipmh_writeDIFtoFile(dom)
             pageCounter = 1
+            # Check for resumptionToken
+            resumptionToken = dom.find(
+                    'oai:ListRecords/oai:resumptionToken',
+                    namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
+            if resumptionToken != None:
+                resumptionToken = resumptionToken.text
 
-            while resumptionToken != []:
-                print "\n"
-                print "Handling resumptionToken: %.0f \n" % pageCounter
+            # Manage resumptionToken, i.e. segmentation of results in
+            # pages
+            while resumptionToken != None:
+                print "\n\tHandling resumptionToken: %.0f" % pageCounter
                 resumptionToken = ul.urlencode({'resumptionToken':resumptionToken}) # create resumptionToken URL parameter
                 getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
                 dom = self.harvestContent(getRecordsURLLoop)
@@ -83,20 +93,46 @@ class MetadataHarvester(object):
                 else:
                     print "dom = " + str(dom) + ', for page ' + str(pageCounter)
 
-                resumptionToken = self.oaipmh_resumptionToken(getRecordsURLLoop)
+                resumptionToken = dom.find(
+                        'oai:ListRecords/oai:resumptionToken',
+                        namespaces={'oai':
+                            'http://www.openarchives.org/OAI/2.0/'})
+                if resumptionToken != None:
+                    resumptionToken = resumptionToken.text
                 pageCounter += 1
 
-            print "\n\nHarvesting took: %s [h:mm:ss]" % str(datetime.now()-start_time)
 
         elif hProtocol == 'OGC-CSW':
             getRecordsURL = str(baseURL + records)
             print "Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol)
             start_time = datetime.now()
             dom = self.harvestContent(getRecordsURL)
+            cswHeader = dom.find('csw:SearchResults',
+                    namespaces={'csw':'http://www.opengis.net/cat/csw/2.0.2'})
+            if cswHeader == None:
+                print "Could not parse header response"
+                sys.exit(2)
+            numRecs = int(cswHeader.get("numberOfRecordsMatched"))
+            nextRec =  int(cswHeader.get('nextRecord'))
+            self.numRecsReturned = int(cswHeader.get('numberOfRecordsReturned'))
             if dom != None:
                 self.ogccsw_writeCSWISOtoFile(dom)
+            while nextRec < numRecs:
+                getRecordsURLNew = getRecordsURL
+                getRecordsURLNew += '&startposition='
+                getRecordsURLNew += str(nextRec)
+                dom = self.harvestContent(getRecordsURLNew)
+                cswHeader = dom.find('csw:SearchResults',
+                        namespaces={'csw':'http://www.opengis.net/cat/csw/2.0.2'})
+                nextRec =  int(cswHeader.get('nextRecord'))
+                self.numRecsReturned = int(cswHeader.get('numberOfRecordsReturned'))
+                self.ogccsw_writeCSWISOtoFile(dom)
+                if nextRec == 0:
+                    break
 
-            print "\n\nHarvesting took: %s [h:mm:ss]\n" % str(datetime.now()-start_time)
+
+            print "Harvesting completed"
+            print "Harvesting took: %s [h:mm:ss]" % str(datetime.now()-start_time)
 
         elif hProtocol == "OpenSearch":
             getRecordsURL = str(baseURL + records)
@@ -173,89 +209,134 @@ class MetadataHarvester(object):
 
     def ogccsw_writeCSWISOtoFile(self,dom):
         """ Write CSW-ISO elements in dom to file """
-        print("Writing CSW ISO metadata elements to disk... ")
+        myns = {
+                'csw':'http://www.opengis.net/cat/csw/2.0.2',
+                'gmd':'http://www.isotc211.org/2005/gmd',
+                'gco':'http://www.isotc211.org/2005/gco',
+                'gml':'http://www.opengis.net/gml/3.2'
+                }
 
-        mD_metadata_elements = dom.getElementsByTagName('gmd:MD_Metadata')
-        mDsize = mD_metadata_elements.length
-        size_idInfo = dom.getElementsByTagName('gmd:identificationInfo').length
-        print "\tFound %.f ISO records." %mDsize
+        record_elements = dom.xpath('/csw:GetRecordsResponse/csw:SearchResults/gmd:MD_Metadata', 
+                namespaces=myns)
+        # This won't work as NumberOfRecordsReturned is not updated for
+        # the last request...
+##       if len(record_elements) != self.numRecsReturned:
+##           print "Mismatch in number of records, bailing out"
+##           sys.exit(2)
+        print "\tNumber of records found",len(record_elements)
 
-        if mDsize>0:
-            counter = 1
-            for md_element in mD_metadata_elements:
-                # Check if element contains valid metadata
-                idInfo = md_element.getElementsByTagName('gmd:identificationInfo')
+        numRecs = len(record_elements)
 
-                try:
-                    # Use unique ID as filename
-                    fileIdentifier = md_element.getElementsByTagName('gmd:fileIdentifier')[0]
-                    cs = fileIdentifier.getElementsByTagName('gco:CharacterString')[0]
-                    fname = cs.firstChild.nodeValue
-                except:
-                    print "\n\tMetadata element did not contain unique ID"
-                    fname = "tmp_" + str(counter)
-                    continue
-
-                if idInfo !=[]:
-                    sys.stdout.write('\tWriting CSW-ISO elements %.f / %d \r' %(counter,size_idInfo))
-                    sys.stdout.flush()
-                    self.write_to_file(md_element,fname)
-                    counter += 1
-                # Temporary break for testing
-                #if counter == 3:
-                #    break;
+        counter = 0
+        for record in record_elements:
+            cswid = record.find('gmd:fileIdentifier/gco:CharacterString',
+                    namespaces=myns)
+            if cswid == None:
+                print "Skipping record, no FileID"
+                continue
+            # Dump to file...
+            self.write_to_file(record, cswid.text)
+            counter += 1
+        print "\tNumber of records written", counter
 
 
     def oaipmh_writeDIFtoFile(self,dom):
         """ Write DIF elements in dom to file """
-        print "Writing OAI-PMH DIF elements to disk... "
 
-        record_elements = dom.getElementsByTagName('record')
-        size_dif = dom.getElementsByTagName('DIF').length
+        myns = {
+                'oai':'http://www.openarchives.org/OAI/2.0/',
+                'dif':'http://gcmd.gsfc.nasa.gov/Aboutus/xml/dif/'
+                }
+        record_elements =  dom.xpath('/oai:OAI-PMH/oai:ListRecords/oai:record', 
+                namespaces=myns)
+        print "\tNumber of records found",len(record_elements)+1
+        size_dif = len(record_elements)
 
         if size_dif != 0:
             counter = 1
             for record in record_elements:
-                for child in record.childNodes:
-                    # If record contains header, check if dataset is deleted. (Not implemented)
-                    if str(child.nodeName) == 'header':
-                        has_attrib = child.hasAttributes()
+                # Check header if deleted
+                #print ET.tostring(record)
+                datestamp = record.find('oai:header/oai:datestamp',
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'}).text
+                oaiid = record.find('oai:header/oai:identifier',
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'}).text
+                delete_status = record.find("oai:header[@status='deleted']",
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
+                # Need to add handling of deleted records,
+                # i.e. modify old records...
+                # Cahallenges arise when oaiid and difid are different as
+                # difid is used as the filename...
+                if delete_status != None:
+                    print "This record has been deleted"+"\n\t",oaiid
+                    #print ">>>status", counter, delete_status, len(delete_status)
+                difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID',
+                        namespaces=myns)
+                if difid == None:
+                    print "Skipping record, no DIF ID"
+                    continue
+                difid = difid.text
+##               if oaiid != difid:
+##                   if difid not in oaiid:
+##                       print "\tErrors in identifiers, skipping record!!!"
+##                       print "\toaiid", oaiid
+##                       print "\tdifid", difid
+##                       continue
+##                   else:
+##                       print "Mismatch between OAI and DIF identifiers, using DIF identifiers"
+                difrec = record.find('oai:metadata/dif:DIF',
+                        namespaces=myns)
+                difid = difid.replace('/','-')
+                difid = difid.replace(':','-')
 
-                if not has_attrib:
-                    sys.stdout.write('\tWriting DIF elements %.f / %d \r' %(counter,size_dif))
-                    sys.stdout.flush()
-                    dif = record.getElementsByTagName('DIF')[0]
-                    #use unique filename
-                    fname = dif.getElementsByTagName('Entry_ID')[0].childNodes[0].nodeValue
-                    self.write_to_file(dif,fname)
-                    counter += 1
-                # Temporary break for testing
-                #if counter == 10:
-                #    break;
+                # Dump to file
+                self.write_to_file(difrec, difid)
+                counter += 1
         else:
             print "\trecords did not contain DIF elements"
 
-    def write_to_file(self, root, fname):
+        print "\tNumber of records written to files", counter
+        return
+
+    def write_to_file(self, record, myid):
         """ Function for storing harvested metadata to file
             - root: root Element to be stored. <DOM Element>
             - fname: unique id. <String>
             - output_path: output directory. <String>
         """
-        outputDir = self.outputDir
-        total_fname = outputDir + fname + '.xml'
-        output = codecs.open(total_fname ,'w','utf-8')
-        output.write(root.toxml())
-        output.close()
+        if not os.path.isdir(self.outputDir):
+           try:
+               os.makedirs(self.outputDir)
+           except:
+               print "Could not create output directory"
+               sys.exit(2)
+
+        myid = myid.replace('/','-')
+        myid = myid.replace(':','-')
+        filename = self.outputDir+'/'+myid+'.xml'
+        outputstr = ET.ElementTree(record)
+        try:
+            outputstr.write(filename, pretty_print=True,
+                    xml_declaration=True, standalone=None, 
+                    encoding="UTF-8")
+        except:
+            print "Could not create output file", filename
+            raise
+            sys.exit(2)
+        return
 
     def harvestContent(self,URL,credentials=False,uname="foo",pw="bar"):
         """ Function for harvesting content from URL."""
         try:
             if not credentials:
                 file = ul2.urlopen(URL,timeout=60) # Timeout depends on user
-                data = file.read()
+                #data = file.read()
+                data = ET.parse(file)
                 file.close()
-                return parseString(data)
+                #return parseString(data)
+                return data
             else:
+                # Not working with lxml
                 p = ul2.HTTPPasswordMgrWithDefaultRealm()
                 p.add_password(None, URL, uname, pw)
                 handler = ul2.HTTPBasicAuthHandler(p)
@@ -329,7 +410,10 @@ def main(argv):
         else:
             request = "?verb=ListRecords&metadataPrefix="+srcformat
     elif srcprotocol == "OGC-CSW":
-        request = "?SERVICE=CSW&VERSION=2.0.2&request=GetRecords&constraintLanguage=CQL_TEXT&typeNames=csw:Record&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd"
+        if not "?SERVICE" in srcurl:
+            request = "?SERVICE=CSW&VERSION=2.0.2&request=GetRecords&constraintLanguage=CQL_TEXT&typeNames=csw:Record&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full"
+        else:
+            request = ""
     elif srcprotocol == "OpenSearch":
         request = "?q=*"
     else:
