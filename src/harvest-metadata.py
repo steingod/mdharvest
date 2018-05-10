@@ -55,6 +55,7 @@ class MetadataHarvester(object):
         self.hProtocol = hProtocol
         self.username = username
         self.pw = pw
+        self.numRecHarv = 0
 
     def harvest(self):
         """ Inititates harvester. Chooses strategy depending on
@@ -101,6 +102,9 @@ class MetadataHarvester(object):
                     resumptionToken = resumptionToken.text
                 pageCounter += 1
 
+            print "Harvesting completed"
+            print "Harvesting took: %s [h:mm:ss]" % str(datetime.now()-start_time)
+            print "Number of records successfully harvested", self.numRecHarv
 
         elif hProtocol == 'OGC-CSW':
             getRecordsURL = str(baseURL + records)
@@ -130,9 +134,9 @@ class MetadataHarvester(object):
                 if nextRec == 0:
                     break
 
-
             print "Harvesting completed"
             print "Harvesting took: %s [h:mm:ss]" % str(datetime.now()-start_time)
+            print "Number of records successfully harvested", self.numRecHarv
 
         elif hProtocol == "OpenSearch":
             getRecordsURL = str(baseURL + records)
@@ -171,7 +175,6 @@ class MetadataHarvester(object):
         else:
             print '\nProtocol %s is not accepted.' % hProtocol
             exit()
-
 
     def openSearch_writeENTRYtoFile(self,dom):
         """ Write OpenSearch ENTRY elements in fom to file"""
@@ -238,7 +241,8 @@ class MetadataHarvester(object):
             self.write_to_file(record, cswid.text)
             counter += 1
         print "\tNumber of records written", counter
-
+        self.numRecHarv += counter
+        return
 
     def oaipmh_writeDIFtoFile(self,dom):
         """ Write DIF elements in dom to file """
@@ -296,6 +300,7 @@ class MetadataHarvester(object):
             print "\trecords did not contain DIF elements"
 
         print "\tNumber of records written to files", counter
+        self.numRecHarv += counter
         return
 
     def write_to_file(self, record, myid):
