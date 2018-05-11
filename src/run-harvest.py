@@ -17,6 +17,7 @@ UPDATED:
         Modified to Python
 
 COMMENTS:
+    - Add logging
 
 """
 
@@ -84,6 +85,8 @@ def main(argv):
 
     # Each section is a data centre to harvest
     for section in cfg:
+        if section == 'CCIN':
+            continue
         if cfg[section]['protocol'] == 'OAI-PMH':
             if cfg[section]['set']:
                 request = "?verb=ListRecords"\
@@ -104,10 +107,11 @@ def main(argv):
         mh = MetadataHarvester(cfg[section]['source'],
                 request,cfg[section]['dest1'],cfg[section]['protocol'])
         try: 
-            mh.harvest()
+            numRec = mh.harvest()
         except Exception, e:
             print "Something went wrong on harvest from", section
             print str(e)
+        print "Number of records harvested", section, numRec
 
     sys.exit(0)
 

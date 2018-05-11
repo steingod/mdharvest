@@ -23,7 +23,7 @@ COMMENTS (for further development):
     - Rewrite to lxml started for OpenSearch
     - Rename dom elements when completed, and remove DOM requirement...
     - Rename file to avoid using dash...
-    - Add ISO19115 support to OAI-PMH
+    - self-numRecHarv is incorrect when harvest fails
 """
 
 import urllib2 as ul2
@@ -47,24 +47,29 @@ def usage():
     sys.exit(2)
 
 class MetadataHarvester(object):
-    """ Creates metadata-harvester object with methods for harvesting and writing
+    """ 
+    Creates metadata-harvester object with methods for harvesting and writing
     """
-    def __init__(self, baseURL, records, outputDir, hProtocol, username=None, pw=None):
+    def __init__(self, baseURL, records, outputDir, hProtocol, 
+            srcfmt = None, username=None, pw=None):
         """ set variables in class """
         self.baseURL = baseURL
         self.records = records
         self.outputDir = outputDir
         self.hProtocol = hProtocol
+        self.srcfmt = srcfmt
         self.username = username
         self.pw = pw
         self.numRecHarv = 0
 
     def harvest(self):
-        """ Inititates harvester. Chooses strategy depending on
-            harvesting  protocol
+        """ 
+        Inititates harvester. Chooses strategy depending on
+        harvesting  protocol
         """
         baseURL, records, hProtocol, uname, pw = self.baseURL, self.records, self.hProtocol, self.username, self.pw
 
+        self.numRecHarv = 0
         if hProtocol == 'OAI-PMH':
             # Could/should be more sophistiated by means of deciding url
             # properties
@@ -75,7 +80,12 @@ class MetadataHarvester(object):
             # Initial phase
             dom = self.harvestContent(getRecordsURL)
             if dom != None:
-                self.oaipmh_writeDIFtoFile(dom)
+                if "dif" in self.srcfmt:
+                    self.oaipmh_writeDIFtoFile(dom)
+                elif "iso" in self.srcfmt:
+                    self.oaipmh_writeISOtoFile(dom)
+                else:
+                    raise "Metadata format not supported yet."
             else:
                 print "Server is not responding properly"
                 raise IOError("Server to harvest is not responding properly")
@@ -96,7 +106,12 @@ class MetadataHarvester(object):
                 getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
                 dom = self.harvestContent(getRecordsURLLoop)
                 if dom != None:
-                    self.oaipmh_writeDIFtoFile(dom)
+                    if "dif" in self.srcfmt:
+                        self.oaipmh_writeDIFtoFile(dom)
+                    elif "iso" in self.srcfmt:
+                        self.oaipmh_writeISOtoFile(dom)
+                    else:
+                        raise "Metadata format not supported yet."
                 else:
                     print "dom = " + str(dom) + ', for page ' + str(pageCounter)
 
@@ -256,8 +271,71 @@ class MetadataHarvester(object):
         self.numRecHarv += counter
         return
 
+    def oaipmh_writeISOtoFile(self, dom):
+        """ 
+        Write ISO elements in dom to file 
+        """
+        myns = {
+                'oai':'http://www.openarchives.org/OAI/2.0/',
+                'gmd':'http://www.isotc211.org/2005/gmd',
+                'gco':'http://www.isotc211.org/2005/gco',
+                'gml':'http://www.opengis.net/gml/3.2'
+                }
+        record_elements =  dom.xpath('/oai:OAI-PMH/oai:ListRecords/oai:record', 
+                namespaces=myns)
+        print "\tNumber of records found",len(record_elements)+1
+        size_dif = len(record_elements)
+
+        if size_dif != 0:
+            counter = 1
+            for record in record_elements:
+                # Check header if deleted
+                datestamp = record.find('oai:header/oai:datestamp',
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'}).text
+                oaiid = record.find('oai:header/oai:identifier',
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'}).text
+                delete_status = record.find("oai:header[@status='deleted']",
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
+                # Need to add handling of deleted records,
+                # i.e. modify old records...
+                # Challenges arise when oaiid and isoid are different as
+                # isoid is used as the filename...
+                if delete_status != None:
+                    print "This record has been deleted"+"\n\t",oaiid
+                    #print ">>>status", counter, delete_status, len(delete_status)
+                isoid = record.find('oai:metadata/gmd:MD_Metadata/gmd:fileIdentifier/gco:CharacterString',
+                        namespaces=myns)
+                if isoid == None:
+                    print "Skipping record, no ISO ID"
+                    continue
+                isoid = isoid.text
+##               if oaiid != isoid:
+##                   if isoid not in oaiid:
+##                       print "\tErrors in identifiers, skipping record!!!"
+##                       print "\toaiid", oaiid
+##                       print "\tisoid", isoid
+##                       continue
+##                   else:
+##                       print "Mismatch between OAI and DIF identifiers, using DIF identifiers"
+                isorec = record.find('oai:metadata/gmd:MD_Metadata',
+                        namespaces=myns)
+
+                # Dump to file
+                self.write_to_file(isorec, isoid)
+                counter += 1
+        else:
+            print "\trecords did not contain DIF elements"
+
+        print "\tNumber of records written to files", counter
+        self.numRecHarv += counter
+
+        return
+
+
     def oaipmh_writeDIFtoFile(self,dom):
-        """ Write DIF elements in dom to file """
+        """ 
+        Write DIF elements in dom to file 
+        """
 
         myns = {
                 'oai':'http://www.openarchives.org/OAI/2.0/',
@@ -302,8 +380,6 @@ class MetadataHarvester(object):
 ##                       print "Mismatch between OAI and DIF identifiers, using DIF identifiers"
                 difrec = record.find('oai:metadata/dif:DIF',
                         namespaces=myns)
-                difid = difid.replace('/','-')
-                difid = difid.replace(':','-')
 
                 # Dump to file
                 self.write_to_file(difrec, difid)
@@ -330,6 +406,7 @@ class MetadataHarvester(object):
 
         myid = myid.replace('/','-')
         myid = myid.replace(':','-')
+        myid = myid.replace('.','-')
         filename = self.outputDir+'/'+myid+'.xml'
         outputstr = ET.ElementTree(record)
         try:
@@ -421,6 +498,8 @@ def main(argv):
         usage()
 
     if srcprotocol == "OAI-PMH":
+        if not fflg:
+            usage()
         if sflg:
             request = "?verb=ListRecords&metadataPrefix="+srcformat+"&set="+oaiset
         else:
@@ -437,7 +516,7 @@ def main(argv):
 
     print "Request: "+srcprotocol
 
-    mh = MetadataHarvester(srcurl,request,destination,srcprotocol)
+    mh = MetadataHarvester(srcurl,request,destination,srcprotocol,srcformat)
     mh.harvest()
 
     sys.exit()
