@@ -145,8 +145,7 @@ def main(argv):
                         xmd=ET.XSLT.strparam(xmdfile),
                         mmdid=ET.XSLT.strparam(str(myuuid)))
             else:
-                newxml = mytransform(inxml,
-                    xmd=ET.XSLT.strparam(xmdfile))
+                newxml = mytransform(inxml)
             output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
             output.write(ET.tostring(newxml, pretty_print=True))
             output.close()
