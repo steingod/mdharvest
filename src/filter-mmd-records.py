@@ -3,12 +3,16 @@
 """
 PURPOSE:
     This is an reimplmentation of the Perl script filter-dif-records used
-    to subset the harvested discovery metadata records.
+    to subset the harvested discovery metadata records. It relates only to
+    MMD files and can add collection elements to existing files or write
+    files to a new repository.
 
 AUTHOR:
     Øystein Godøy, METNO/FOU, 2018-03-27 
 
 UPDATED:
+    Øystein Godøy, METNO/FOU, 2018-06-23 
+        Added parameter match
 
 NOTES:
     - Not working...
@@ -29,13 +33,32 @@ def usage():
     print "\t-h|--help: dump this information"
     print "\t-i|--indir: specify where to get input"
     print "\t-o|--outdir: specify where to put results"
-    print "\t-p|--parameters: specify parameters to extract"
+    print "\t-p|--parameters: specify parameters to extract (comma separated)"
     print "\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list"
     sys.exit(2)
 
 class CheckMMD():
     def __init__(self, mmd_file):
         self.mmd_file = mmd_file
+
+    def check_params(self,elements,root,params):
+
+        parmatch = False
+
+        #print "Now in check params..."
+
+        for el in elements:
+            #print el.text
+            for p in params:
+                if p in el.text:
+                    parmatch = True
+
+        #print parmatch
+
+        if parmatch:
+            return True
+        else:
+            return False
 
     def check_bounding_box(self,elements,root,bbox):
         if len(elements) > 1:
@@ -73,21 +96,54 @@ class CheckMMD():
             return False
             
 
-    def check_mmd(self, bbox):
+    def check_mmd(self, bbox, params):
+        mymatch = False
         mmd_file = self.mmd_file
         tree = ET.ElementTree(file=mmd_file)
         root = tree.getroot()
+        mynsmap = {'mmd':'http://www.met.no/schema/mmd'}
         #print ET.tostring(root)
 
         # Check bounding box
-        elements = tree.findall('.//mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap)
+        if params:
+            #print "Checking for parameters"
+            #print params
+            elements = tree.findall("mmd:keywords[@vocabulary='GCMD']/mmd:keyword",
+                    namespaces=mynsmap)
+        if bbox:
+            #print "Checking for bounding box"
+            #print bbox
+            elements = tree.findall('mmd:geographic_extent/mmd:rectangle',
+                    namespaces=mynsmap)
+
         if not elements:
-            print "Did not find any bounding box of type rectangular..."
+            print "Did not find any elements of the type requested..."
             return False
-        if self.check_bounding_box(elements,root,bbox):
-            return True
-        else:
-            return False
+        if bbox:
+            if self.check_bounding_box(elements,root,bbox):
+                mymatch = True
+        if params:
+            if self.check_params(elements,root,params):
+                mymatch = True
+
+        elements = tree.findall('mmd:collection', namespaces=mynsmap)
+
+        if not elements:
+            return mymatch
+        #else:
+        #    for el in elements:
+        #        print el.text
+        #print elements[-1].text
+        collection = elements[-1].getparent()
+        #print collection.text
+        collection.insert(collection.index(elements[-1])+1,
+                ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>GCW</mmd:collection>"""))
+        print ET.tostring(collection)
+        tree = ET.ElementTree(collection)
+        tree.write(self.mmd_file, pretty_print=True)
+
+        sys.exit()
+        return mymatch
 
 def main(argv):
     # This is the main method
@@ -123,6 +179,10 @@ def main(argv):
 
     # Define parameters to find
     # Not working yet...
+    if pflg:
+        parameters = parameters.split(',')
+    else:
+        parameters = None
 
     # Define bounding box
     # Provided as comma separated list (S,W,N,E)
@@ -132,6 +192,8 @@ def main(argv):
         #print bbox
         bounding = [float(i) for i in bbox]
         #print bounding
+    else:
+        bounding = None
 
 
     # Find files to process
@@ -159,8 +221,8 @@ def main(argv):
             print i, myfile
             i += 1
             #inxml = ET.parse(s.join((indir,myfile)))
-            check_file = CheckMMD(s.join((indir,myfile)))
-            if check_file.check_mmd(bounding):
+            file2check = CheckMMD(s.join((indir,myfile)))
+            if file2check.check_mmd(bounding, parameters):
                 print "Success"
                 f.write(s.join((indir,myfile))+"\n")
             else:
