@@ -148,7 +148,7 @@ class CheckMMD():
                     ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>"+item+"</mmd:collection>"""))
         #print ET.tostring(tree)
         tree = ET.ElementTree(collection)
-        tree.write('mynewxml.xml', pretty_print=True)
+        tree.write(mmd_file, pretty_print=True)
 
         sys.exit()
         return mymatch
