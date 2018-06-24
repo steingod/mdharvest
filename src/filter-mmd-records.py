@@ -35,6 +35,7 @@ def usage():
     print "\t-o|--outdir: specify where to put results"
     print "\t-p|--parameters: specify parameters to extract (comma separated)"
     print "\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list"
+    print "\t-c|--collection: specify the collection to add (comma separated)"
     sys.exit(2)
 
 class CheckMMD():
@@ -96,7 +97,7 @@ class CheckMMD():
             return False
             
 
-    def check_mmd(self, bbox, params):
+    def check_mmd(self, bbox, params, coll):
         mymatch = False
         mmd_file = self.mmd_file
         tree = ET.ElementTree(file=mmd_file)
@@ -126,21 +127,28 @@ class CheckMMD():
             if self.check_params(elements,root,params):
                 mymatch = True
 
-        elements = tree.findall('mmd:collection', namespaces=mynsmap)
+        # Check if the collection is already added
+        for item in coll:
+            myel = '//mmd:collection[text()="'+item+'"]'
+            myelement = tree.xpath(myel, namespaces=mynsmap)
+            if myelement:
+                coll.remove(item)
 
-        if not elements:
+        if not coll:
             return mymatch
-        #else:
-        #    for el in elements:
-        #        print el.text
-        #print elements[-1].text
-        collection = elements[-1].getparent()
-        #print collection.text
-        collection.insert(collection.index(elements[-1])+1,
-                ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>GCW</mmd:collection>"""))
-        print ET.tostring(collection)
+
+        # Add new collections
+        myelement = tree.find('mmd:collection', namespaces=mynsmap)
+
+        if myelement is None:
+            return mymatch
+        collection = myelement.getparent()
+        for item in coll:
+            collection.insert(collection.index(myelement),
+                    ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>"+item+"</mmd:collection>"""))
+        #print ET.tostring(tree)
         tree = ET.ElementTree(collection)
-        tree.write(self.mmd_file, pretty_print=True)
+        tree.write('mynewxml.xml', pretty_print=True)
 
         sys.exit()
         return mymatch
@@ -150,12 +158,12 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hi:o:p:b:",
-                ["help","indir","outdir","parameters","bounding"])
+        opts, args = getopt.getopt(argv,"hi:o:p:b:c:",
+                ["help","indir","outdir","parameters","bounding","collection"])
     except getopt.GetoptError:
         usage()
 
-    iflg = oflg = pflg = bflg = False
+    iflg = oflg = pflg = bflg = cflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
@@ -171,10 +179,13 @@ def main(argv):
         elif opt in ("-b","--bounding"):
             bounding = arg
             bflg = True
+        elif opt in ("-c","--collection"):
+            collection = arg
+            cflg = True
 
     if not iflg:
         usage()
-    elif not oflg:
+    elif not cflg:
         usage()
 
     # Define parameters to find
@@ -183,6 +194,10 @@ def main(argv):
         parameters = parameters.split(',')
     else:
         parameters = None
+    if cflg:
+        collection = collection.split(',')
+    else:
+        collection = None
 
     # Define bounding box
     # Provided as comma separated list (S,W,N,E)
@@ -222,9 +237,9 @@ def main(argv):
             i += 1
             #inxml = ET.parse(s.join((indir,myfile)))
             file2check = CheckMMD(s.join((indir,myfile)))
-            if file2check.check_mmd(bounding, parameters):
+            if file2check.check_mmd(bounding, parameters, collection):
                 print "Success"
-                f.write(s.join((indir,myfile))+"\n")
+                #f.write(s.join((indir,myfile))+"\n")
             else:
                 print "Failure"
     f.close()
