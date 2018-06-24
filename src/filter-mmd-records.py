@@ -27,6 +27,7 @@ import os
 import getopt
 import lxml.etree as ET
 import codecs
+import re
 
 def usage():
     print sys.argv[0]+" [options] input"
@@ -39,8 +40,11 @@ def usage():
     sys.exit(2)
 
 class CheckMMD():
-    def __init__(self, mmd_file):
+    def __init__(self, mmd_file, bounding, parameters, collection):
         self.mmd_file = mmd_file
+        self.bbox = bounding
+        self.params = parameters
+        self.coll = collection
 
     def check_params(self,elements,root,params):
 
@@ -51,10 +55,11 @@ class CheckMMD():
         for el in elements:
             #print el.text
             for p in params:
-                if p in el.text:
+                if re.search(p, el.text, re.IGNORECASE):
+                    print p,"-",el.text
                     parmatch = True
 
-        #print parmatch
+        #print ">>>>>>>>",parmatch
 
         if parmatch:
             return True
@@ -97,9 +102,12 @@ class CheckMMD():
             return False
             
 
-    def check_mmd(self, bbox, params, coll):
+    def check_mmd(self):
         mymatch = False
         mmd_file = self.mmd_file
+        params = self.params
+        tmpcoll = self.coll
+        bbox = self.bbox
         tree = ET.ElementTree(file=mmd_file)
         root = tree.getroot()
         mynsmap = {'mmd':'http://www.met.no/schema/mmd'}
@@ -126,31 +134,39 @@ class CheckMMD():
         if params:
             if self.check_params(elements,root,params):
                 mymatch = True
+        if mymatch == False:
+            return mymatch
 
         # Check if the collection is already added
-        for item in coll:
+        print ">>>>>>>>", mymatch
+        for item in tmpcoll:
+            print ">>>>>>>>>>>>>>>>>>>>>>>",item
             myel = '//mmd:collection[text()="'+item+'"]'
             myelement = tree.xpath(myel, namespaces=mynsmap)
             if myelement:
-                coll.remove(item)
+                print "Already belongs to",item
+                tmpcoll.remove(item)
 
-        if not coll:
+        if not tmpcoll:
+            print "No collections left"
             return mymatch
 
         # Add new collections
         myelement = tree.find('mmd:collection', namespaces=mynsmap)
 
         if myelement is None:
+            print "No collection found"
             return mymatch
         collection = myelement.getparent()
-        for item in coll:
+        for item in tmpcoll:
             collection.insert(collection.index(myelement),
                     ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>"+item+"</mmd:collection>"""))
         #print ET.tostring(tree)
+        print "Dumping information to file", mmd_file
         tree = ET.ElementTree(collection)
+        print ">>>> ",self.mmd_file
         tree.write(mmd_file, pretty_print=True)
 
-        sys.exit()
         return mymatch
 
 def main(argv):
@@ -219,13 +235,14 @@ def main(argv):
         sys.exit(1)
     
     # Check that the destination exists, create if not
-    if not os.path.exists(outdir):
-        print "Output directory does not exist, trying to create it..."
-        try:
-            os.makedirs(outdir)
-        except OSError as e:
-            print e
-            sys.exit(1)
+    if oflg:
+        if not os.path.exists(outdir):
+            print "Output directory does not exist, trying to create it..."
+            try:
+                os.makedirs(outdir)
+            except OSError as e:
+                print e
+                sys.exit(1)
 
     # Process files, dump valid filenames to file
     f = open("tmpfile.txt","w+")
@@ -236,10 +253,9 @@ def main(argv):
             print i, myfile
             i += 1
             #inxml = ET.parse(s.join((indir,myfile)))
-            file2check = CheckMMD(s.join((indir,myfile)))
-            if file2check.check_mmd(bounding, parameters, collection):
+            file2check = CheckMMD(s.join((indir,myfile)),bounding, parameters, collection)
+            if file2check.check_mmd():
                 print "Success"
-                #f.write(s.join((indir,myfile))+"\n")
             else:
                 print "Failure"
     f.close()
