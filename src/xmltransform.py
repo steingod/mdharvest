@@ -101,8 +101,8 @@ def main(argv):
     else:
         try:
             myfiles = os.listdir(indir)
-        except os.error:
-            print os.error
+        except OSError as e:
+            print e
             sys.exit(1)
     
     # Check that the destination exists, create if not
