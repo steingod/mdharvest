@@ -18,6 +18,8 @@ UPDATED:
 
 COMMENTS:
     - Add logging
+    - Add selective harvest (interactive based on config)
+    - Add temporal span for OAI-PMH harvest (missing for CSW)
 
 """
 
@@ -32,6 +34,7 @@ def usage():
     print "\t-h|--help: dump this information"
     print "\t-c|--config: specify the configuration file to use"
     print "\t-l|--logfile: specify the logfile to use"
+    print "\t-f|--from: specify DateTime to harvest from"
     sys.exit(2)
 
 def check_directories(cfg):
@@ -52,8 +55,8 @@ def check_directories(cfg):
 def main(argv):
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hc:l:",
-                ["help","config","logfile"])
+        opts, args = getopt.getopt(argv,"hc:l:f:",
+                ["help","config","logfile","from"])
     except getopt.GetoptError:
         usage()
 
@@ -67,6 +70,9 @@ def main(argv):
         elif opt in ("-l","--logfile"):
             logfile = arg
             lflg =True
+        elif opt in ("-f","--from"):
+            fromTime = arg
+            fflg =True
 
     if not cflg:
         usage()
@@ -89,12 +95,23 @@ def main(argv):
             continue
         if cfg[section]['protocol'] == 'OAI-PMH':
             if cfg[section]['set']:
-                request = "?verb=ListRecords"\
-                        "&metadataPrefix="+cfg[section]['mdkw']+\
-                        "&set="+cfg[section]['set'] 
+                if fflg:
+                    request = "?verb=ListRecords"\
+                            "&metadataPrefix="+cfg[section]['mdkw']+\
+                            "&set="+cfg[section]['set']+\
+                            "&from="+fromTime
+                else:
+                    request = "?verb=ListRecords"\
+                            "&metadataPrefix="+cfg[section]['mdkw']+\
+                            "&set="+cfg[section]['set'] 
             else:   
-                request = "?verb=ListRecords"\
-                        "&metadataPrefix="+cfg[section]['mdkw']
+                if fflg:
+                    request = "?verb=ListRecords"\
+                            "&metadataPrefix="+cfg[section]['mdkw']+\
+                            "&from="+fromTime
+                else: 
+                    request = "?verb=ListRecords"\
+                            "&metadataPrefix="+cfg[section]['mdkw']
         elif cfg[section]['protocol'] == 'OGC-CSW':
             request ="?SERVICE=CSW&VERSION=2.0.2"\
                     "&request=GetRecords&constraintLanguage=CQL_TEXT" \
@@ -104,8 +121,11 @@ def main(argv):
         else:
             print "Protocol not supported yet"
         print request
+        numRec = 0
         mh = MetadataHarvester(cfg[section]['source'],
-                request,cfg[section]['dest1'],cfg[section]['protocol'])
+                request,cfg[section]['dest1'],
+                cfg[section]['protocol'],
+                cfg[section]['mdkw'])
         try: 
             numRec = mh.harvest()
         except Exception, e:
