@@ -19,11 +19,10 @@ UPDATED:
         Support for MM2 conversion (including information from XMD)
 
 NOTES:
-    - Need to relate to the configuration file of run-harvest.py
-    - Use only standard XSLTs
-    - Add modification of collections etc in this step or afterwards
     - Remove options not used anymore
-    - Make method??
+        - Do we need indir, outdir, parent etc still? Only for MM2/XMD
+          conversion?
+    - Make methods for both processing of files and modification of XSLTs??
 
 """
 
@@ -191,29 +190,24 @@ def main(argv):
             sys.exit(1)
         myroot = myxslt.getroot()
         # Find the location where to insert element
-        #myelement = myxslt.find(".//xsl:template",
-        #myelement = myxslt.find(".//xsl:template[@match='dif:Data_Set_Citation']",
-        myelement = myxslt.find(".//xsl:element[@name='mmd:collection']",
-                namespaces=myroot.nsmap)
-        if myelement is None:
-            print "Can't find the requested element, bailing out"
-            sys.exit(2)
-        myparent = myelement.getparent()
-        for coll in mycollections.split(','):
-            myelem = ET.Element(ET.QName('http://www.w3.org/1999/XSL/Transform','element'),
-                    attrib={'name':'mmd:collection'},
-                    nsmap=myroot.nsmap)
-            myelem.text = coll
-            #myelem.set('name','collection')
-            #myparent.insert(myparent.index(myelement)+1,myelem)
-            myelement.append(myelem)
-            #myroot.append(myelem)
-            #print collelem[coll]
-        #print ET.tostring(myxslt)
+        if cfg[section]['mdkw'] in mydif:
+            myelement = myxslt.find(".//xsl:element[@name='mmd:collection']",
+                    namespaces=myroot.nsmap)
+            if myelement is None:
+                print "Can't find the requested element, bailing out"
+                sys.exit(2)
+            myparent = myelement.getparent()
+            for coll in mycollections.split(','):
+                myelem = ET.Element(ET.QName('http://www.w3.org/1999/XSL/Transform','element'),
+                        attrib={'name':'mmd:collection'},
+                        nsmap=myroot.nsmap)
+                myelem.text = coll
+                myparent.insert(myparent.index(myelement)+1,myelem)
+        elif cfg[section]['mdkw'] in myiso:
+            print "ISO is not supported yet..."
+            sys.exit()
         myxslt.write('myfile.xsl',pretty_print=True)
-        #sys.exit()
         mytransform = ET.XSLT(myxslt)
-        #sys.exit()
 
         # Find files to process
         try:
@@ -227,69 +221,6 @@ def main(argv):
             print "Something went wrong processing files"
             sys.exit(2)
 
-
-    sys.exit()
-
-    # Find files to process
-    if fflg:
-        if not os.path.isfile(indir):
-            print "This is not a file"
-            sys.exit(2)
-        myfiles = [os.path.basename(indir)]
-        indir = os.path.dirname(indir)
-    else:
-        try:
-            myfiles = os.listdir(indir)
-        except OSError as e:
-            print e
-            sys.exit(1)
-    
-    # Check that the destination exists, create if not
-    if not os.path.exists(outdir):
-        print "Output directory does not exist, trying to create it..."
-        try:
-            os.makedirs(outdir)
-        except OSError as e:
-            print e
-            sys.exit(1)
-
-    # Process files
-    i=0
-    s = "/"
-    for myfile in myfiles:
-        xmlfile = s.join((indir,myfile))
-        print "Processing",xmlfile, i
-        if myfile.endswith(".xml"):
-            if xflg:
-                xmdfile = s.join((indir,myfile.replace(".xml",".xmd")))
-                if not os.path.isfile(xmdfile):
-                    print xmdfile, "not found"
-                    continue
-                xmd = ET.parse(xmdfile)
-                xmdlastupdate = xmd.xpath("//ds:info/@datestamp", \
-                        namespaces={'ds':'http://www.met.no/schema/metamod/dataset'})[0]
-                collection = xmd.xpath("//ds:info/@ownertag", \
-                        namespaces={'ds':'http://www.met.no/schema/metamod/dataset'})[0]
-                myuuid = create_uuid(xmlfile,xmdlastupdate)
-            i += 1
-            inxml = ET.parse(xmlfile)
-            if xflg:
-                if pflg:
-                    newxml = mytransform(inxml,
-                        xmd=ET.XSLT.strparam(xmdfile),
-                        mmdid=ET.XSLT.strparam(str(myuuid)),
-                        parentDataset=ET.XSLT.strparam(str(parentUUID)))
-                else:
-                    newxml = mytransform(inxml,
-                        xmd=ET.XSLT.strparam(xmdfile),
-                        mmdid=ET.XSLT.strparam(str(myuuid)))
-            else:
-                newxml = mytransform(inxml)
-            output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
-            output.write(ET.tostring(newxml, pretty_print=True))
-            output.close()
-
-    sys.exit(0)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
