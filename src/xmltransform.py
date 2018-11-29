@@ -65,16 +65,24 @@ def check_directories(cfg):
                    return(2)
     return(0)
 
-def process_files(myfiles, outdir, mycollections, mytransform):
+#class ProcessFiles(object):
+def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
+    """
+    Create object and methods
+    """
+
+    #def __init__(self, myflags, myfiles, outdir, mycollections, mytransform):
+    #    self.
+
+
     # Process files
     i=0
     s = "/"
     for myfile in myfiles:
-        #xmlfile = s.join((indir,myfile))
-        xmlfile = myfile
+        xmlfile = s.join((indir,myfile))
         print "Processing",xmlfile, i
         if myfile.endswith(".xml"):
-            if xflg:
+            if myflags['xflg']:
                 # while testing
                 # xmdfile = s.join((indir,myfile.replace(".xml",".xmd")))
                 if not os.path.isfile(xmdfile):
@@ -88,7 +96,7 @@ def process_files(myfiles, outdir, mycollections, mytransform):
                 myuuid = create_uuid(xmlfile,xmdlastupdate)
             i += 1
             inxml = ET.parse(xmlfile)
-            if xflg:
+            if myflags['xflg']:
                 if pflg:
                     newxml = mytransform(inxml,
                         xmd=ET.XSLT.strparam(xmdfile),
@@ -104,7 +112,7 @@ def process_files(myfiles, outdir, mycollections, mytransform):
             output.write(ET.tostring(newxml, pretty_print=True))
             output.close()
 
-    return(0)
+    #return(0)
 
 def main(argv):
     # This is the main method
@@ -150,6 +158,7 @@ def main(argv):
     #    usage()
     #elif not sflg:
     #    usage()
+    myflags = {'cflg':cflg, 'xflg':xflg, 'pflg': pflg}
 
     # Read config file
     print "Reading", cfgfile
@@ -214,7 +223,7 @@ def main(argv):
             sys.exit(1)
 
         # Process files
-        if process_files(myfiles, outdir, mycollections, mytransform):
+        if process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
             print "Something went wrong processing files"
             sys.exit(2)
 
