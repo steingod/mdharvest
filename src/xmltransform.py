@@ -22,7 +22,6 @@ NOTES:
     - Need to relate to the configuration file of run-harvest.py
     - Use only standard XSLTs
     - Add modification of collections etc in this step or afterwards
-    - add at correct location...
     - Remove options not used anymore
     - Make method??
 
@@ -184,20 +183,21 @@ def main(argv):
         print mycollections.split(',')
 
         # Define stylesheet and modify accordingly
+        parser = ET.XMLParser(remove_blank_text=True)
         try:
-            myxslt = ET.parse(stylesheet)
+            myxslt = ET.parse(stylesheet, parser)
         except ET.XMLSyntaxError,e:
             print e
             sys.exit(1)
         myroot = myxslt.getroot()
         # Find the location where to insert element
         #myelement = myxslt.find(".//xsl:template",
-        myelement = myxslt.find(".//xsl:template[@match='dif:Data_Set_Citation']",
+        #myelement = myxslt.find(".//xsl:template[@match='dif:Data_Set_Citation']",
+        myelement = myxslt.find(".//xsl:element[@name='mmd:collection']",
                 namespaces=myroot.nsmap)
-        if len(myelement) == 0:
+        if myelement is None:
             print "Can't find the requested element, bailing out"
             sys.exit(2)
-        #print ET.tostring(myelement)
         myparent = myelement.getparent()
         for coll in mycollections.split(','):
             myelem = ET.Element(ET.QName('http://www.w3.org/1999/XSL/Transform','element'),
