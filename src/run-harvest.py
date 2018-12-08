@@ -39,7 +39,7 @@ def usage():
 
 def check_directories(cfg):
     for section in cfg:
-        for name in ['dest1','dest2']:
+        for name in ['raw','mmd']:
             #print section, name
             ##print cfg[section][name]
             if not os.path.isdir(cfg[section][name]):
@@ -60,7 +60,7 @@ def main(argv):
     except getopt.GetoptError:
         usage()
 
-    cflg = lflg = False
+    cflg = lflg = fflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
@@ -123,7 +123,7 @@ def main(argv):
         print request
         numRec = 0
         mh = MetadataHarvester(cfg[section]['source'],
-                request,cfg[section]['dest1'],
+                request,cfg[section]['raw'],
                 cfg[section]['protocol'],
                 cfg[section]['mdkw'])
         try: 
