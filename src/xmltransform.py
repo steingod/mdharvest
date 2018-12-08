@@ -54,7 +54,7 @@ def create_uuid(infile,lastupdate):
 
 def check_directories(cfg):
     for section in cfg:
-        for name in ['dest1','dest2','mmd']:
+        for name in ['raw','mmd']:
             if not os.path.isdir(cfg[section][name]):
                try:
                    os.makedirs(cfg[section][name])
@@ -169,17 +169,17 @@ def main(argv):
         sys.exit(2)
 
     # Each section is a data centre to harvest
-    for section in cfg:
-        if section != 'NPI':
+    for section in sorted(cfg.keys()):
+        if section in ['BAS', 'CCIN', 'WGMS', 'NILU']:
             continue
-        indir = cfg[section]['dest1']
+        indir = cfg[section]['raw']
         outdir = cfg[section]['mmd']
         if cfg[section]['mdkw'] in mydif:
             stylesheet =  '../etc/dif-to-mmd.xsl'
         elif cfg[section]['mdkw'] in myiso:
             stylesheet =  '../etc/iso-to-mmd.xsl'
         mycollections = cfg[section]['collection'].replace(' ','')
-        print mycollections.split(',')
+        #print mycollections.split(',')
 
         # Define stylesheet and modify accordingly
         parser = ET.XMLParser(remove_blank_text=True)

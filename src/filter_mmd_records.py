@@ -5,20 +5,26 @@ PURPOSE:
     This is an reimplmentation of the Perl script filter-dif-records used
     to subset the harvested discovery metadata records. It relates only to
     MMD files and can add collection elements to existing files or write
-    files to a new repository.
+    files to a new repository. Filtering is done on the basis of
+    geographical location and/or parameter content as defined by GCMD DIF
+    keywords.
 
 AUTHOR:
     Øystein Godøy, METNO/FOU, 2018-03-27 
 
 UPDATED:
+    Øystein Godøy, METNO/FOU, 2018-12-08 
+        Changed name, plus updated
     Øystein Godøy, METNO/FOU, 2018-06-23 
         Added parameter match
 
 NOTES:
     - Not working...
+    - Using the same configuration as harvest and transformation
     - Once working for bounding box, create functions for specific
       purposes...
     - Only valid in the Northern hemisphere as of now.
+    - Add option to only process new files
 
 """
 
@@ -28,15 +34,17 @@ import getopt
 import lxml.etree as ET
 import codecs
 import re
+import yaml
 
 def usage():
     print sys.argv[0]+" [options] input"
     print "\t-h|--help: dump this information"
-    print "\t-i|--indir: specify where to get input"
-    print "\t-o|--outdir: specify where to put results"
+    print "\t-c|--configuration: specify where to find the configuration file"
+    print "\t-l|--collection: specify collection to tag the dataset with"
     print "\t-p|--parameters: specify parameters to extract (comma separated)"
     print "\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list"
     print "\t-c|--collection: specify the collection to add (comma separated)"
+    print "\t-g|--gcw: adds cryosphere parameters (and GCW collection)"
     sys.exit(2)
 
 class CheckMMD():
@@ -51,15 +59,16 @@ class CheckMMD():
         parmatch = False
 
         #print "Now in check params..."
+        #for myel in elements:
+        #    print ">>>", ET.tostring(myel)
+        #    print ">>>", myel.text
 
-        for el in elements:
-            #print el.text
-            for p in params:
-                if re.search(p, el.text, re.IGNORECASE):
-                    print p,"-",el.text
-                    parmatch = True
-
-        #print ">>>>>>>>",parmatch
+        for par in params:
+            #print ">>>>>", par
+            #print type(elements)
+            if any(par in mystring.text for mystring in elements):
+                parmatch = True
+                #print ">>>>>>>>",parmatch
 
         if parmatch:
             return True
@@ -115,13 +124,9 @@ class CheckMMD():
 
         # Check bounding box
         if params:
-            #print "Checking for parameters"
-            #print params
             elements = tree.findall("mmd:keywords[@vocabulary='GCMD']/mmd:keyword",
                     namespaces=mynsmap)
         if bbox:
-            #print "Checking for bounding box"
-            #print bbox
             elements = tree.findall('mmd:geographic_extent/mmd:rectangle',
                     namespaces=mynsmap)
 
@@ -138,9 +143,9 @@ class CheckMMD():
             return mymatch
 
         # Check if the collection is already added
-        print ">>>>>>>>", mymatch
+        #print ">>>>>>>>", mymatch
         for item in tmpcoll:
-            print ">>>>>>>>>>>>>>>>>>>>>>>",item
+            #print ">>>>>>>>>>>>>>>>>>>>>>>",item
             myel = '//mmd:collection[text()="'+item+'"]'
             myelement = tree.xpath(myel, namespaces=mynsmap)
             if myelement:
@@ -148,7 +153,7 @@ class CheckMMD():
                 tmpcoll.remove(item)
 
         if not tmpcoll:
-            print "No collections left"
+            print "No collections left to check"
             return mymatch
 
         # Add new collections
@@ -174,34 +179,33 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hi:o:p:b:c:",
-                ["help","indir","outdir","parameters","bounding","collection"])
+        opts, args = getopt.getopt(argv,"hc:p:b:l:g",
+                ["help","configuration","parameters","bounding","collection","gcw"])
     except getopt.GetoptError:
         usage()
 
-    iflg = oflg = pflg = bflg = cflg = False
+    cflg = pflg = bflg = lflg = gflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
-        elif opt in ("-i","--indir"):
-            indir = arg
-            iflg = True
-        elif opt in ("-o","--outdir"):
-            outdir = arg
-            oflg = True
+        elif opt in ("-c","--configuration"):
+            cfgfile = arg
+            cflg = True
         elif opt in ("-p","--parameters"):
             parameters = arg
             pflg = True
         elif opt in ("-b","--bounding"):
             bounding = arg
             bflg = True
-        elif opt in ("-c","--collection"):
+        elif opt in ("-l","--collection"):
             collection = arg
-            cflg = True
+            lflg = True
+        elif opt in ("-g","--gcw"):
+            gflg = True
 
-    if not iflg:
+    if not cflg:
         usage()
-    elif not cflg:
+    elif not (lflg or gflg):
         usage()
 
     # Define parameters to find
@@ -210,55 +214,61 @@ def main(argv):
         parameters = parameters.split(',')
     else:
         parameters = None
+
+    # If filtering for GCW, parameters and collection are added automatic
+    if gflg:
+        parameters = ["CRYOSPHERE",
+                "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE",
+                "OCEANS &gt; SEA ICE"]
+        collection = "GCW"
+
+    # Define collections to add
     if cflg:
         collection = collection.split(',')
     else:
         collection = None
 
+    # Read config file
+    print "Reading", cfgfile
+    with open(cfgfile, 'r') as ymlfile:
+        cfg = yaml.load(ymlfile)
+
     # Define bounding box
     # Provided as comma separated list (S,W,N,E)
     if bflg:
         bbox = bounding.split(",")
-        #print bounding
-        #print bbox
         bounding = [float(i) for i in bbox]
-        #print bounding
     else:
         bounding = None
 
+    # Each section is a data centre to handle
+    for section in cfg:
+        if section == 'CCIN':
+            continue
+        if section != 'NPI':
+            continue
+        # Find files to process
+        try:
+            myfiles = os.listdir(cfg[section]['mmd'])
+        except os.error:
+            print os.error
+            sys.exit(1)
 
-    # Find files to process
-    try:
-        myfiles = os.listdir(indir)
-    except os.error:
-        print os.error
-        sys.exit(1)
-    
-    # Check that the destination exists, create if not
-    if oflg:
-        if not os.path.exists(outdir):
-            print "Output directory does not exist, trying to create it..."
-            try:
-                os.makedirs(outdir)
-            except OSError as e:
-                print e
-                sys.exit(1)
-
-    # Process files, dump valid filenames to file
-    f = open("tmpfile.txt","w+")
-    i=0
-    s = "/"
-    for myfile in myfiles:
-        if myfile.endswith(".xml"):
-            print i, myfile
-            i += 1
-            #inxml = ET.parse(s.join((indir,myfile)))
-            file2check = CheckMMD(s.join((indir,myfile)),bounding, parameters, collection)
-            if file2check.check_mmd():
-                print "Success"
-            else:
-                print "Failure"
-    f.close()
+        # Process files, dump valid filenames to file
+        f = open("tmpfile.txt","w+")
+        i=0
+        s = "/"
+        for myfile in myfiles:
+            if myfile.endswith(".xml"):
+                print i, myfile
+                i += 1
+                #inxml = ET.parse(s.join((indir,myfile)))
+                file2check = CheckMMD(s.join((cfg[section]['mmd'],myfile)),bounding, parameters, collection)
+                if file2check.check_mmd():
+                    print "Success"
+                else:
+                    print "Failure"
+        f.close()
 
 
 if __name__ == '__main__':
