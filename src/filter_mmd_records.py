@@ -133,7 +133,7 @@ class CheckMMD():
             for myfield in bboxfields:
                 myvalue = myel.find('mmd:rectangle/'+myfield,
                         namespaces=root.nsmap).text
-                if myvalue == None:
+                if myvalue == None or myvalue.isspace():
                     setInactive = True
         # Check for multiple bounding box
         # Check for multiple temporal periods
@@ -147,6 +147,8 @@ class CheckMMD():
             myelement = tree.find("mmd:metadata_status",
                     namespaces=mynsmap)
             myelement.text = "Inactive"
+
+        print "#####",setInactive
 
         # Check bounding box
         if self.params and not setInactive:
@@ -168,37 +170,23 @@ class CheckMMD():
         if mymatch == False and setInactive == False:
             return mymatch
 
-        # Check if the collection is already added
-        #print ">>>>>>>>", mymatch
-        print tmpcoll
-        for item in tmpcoll:
-            print ">>>>>>>>>>>>>>>>>>>>>>>",item
-            myel = '//mmd:collection[text()="'+item+'"]'
-            myelement = tree.xpath(myel, namespaces=mynsmap)
-            if myelement:
-                print "Already belongs to",item
-                #tmpcoll.remove(item)
-
-        if not tmpcoll:
-            print "No collections left to check"
-            if not setInactive:
-                return mymatch
-
-        # Add new collections
-        myelement = tree.find('mmd:collection', namespaces=mynsmap)
-
-        if myelement is None:
-            print "No collection found"
-            if not setInactive:
-                return mymatch
-        collection = myelement.getparent()
-        for item in tmpcoll:
-            collection.insert(collection.index(myelement),
-                    ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>"+item+"</mmd:collection>"""))
-        #print ET.tostring(tree)
-        #print "Dumping information to file", mmd_file
-        tree = ET.ElementTree(collection)
-        #print ">>>> ",self.mmd_file
+        # Check if the collection is already added, and add if not
+        #print tmpcoll
+        if mymatch:
+            for item in tmpcoll:
+                myel = '//mmd:collection[text()="'+item+'"]'
+                myelement = tree.xpath(myel, namespaces=mynsmap)
+                if myelement:
+                    print "Already belongs to",item
+                    #tmpcoll.remove(item)
+                else:
+                    # Add new collections
+                    myelement = tree.find('mmd:collection', namespaces=mynsmap)
+                    if myelement is not None:
+                        mycollection = myelement.getparent()
+                        mycollection.insert(mycollection.index(myelement),
+                                ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>"+item+"</mmd:collection>"""))
+        #tree = ET.ElementTree(mycollection)
         tree.write(mmd_file, pretty_print=True)
 
         return mymatch
@@ -278,10 +266,6 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
-        if section == 'CCIN':
-            continue
-        if section != 'NPI':
-            continue
         # Find files to process
         try:
             myfiles = os.listdir(cfg[section]['mmd'])
