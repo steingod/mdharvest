@@ -25,6 +25,7 @@ NOTES:
       purposes...
     - Only valid in the Northern hemisphere as of now.
     - Add option to only process new files
+    - Add option to add collection from project names (e.g. NERSC Normap)
 
 """
 
@@ -54,7 +55,7 @@ class CheckMMD():
         self.params = parameters
         self.coll = collection
 
-    def check_params(self,elements,root,params):
+    def check_params(self,elements,root):
 
         parmatch = False
 
@@ -63,7 +64,7 @@ class CheckMMD():
         #    print ">>>", ET.tostring(myel)
         #    print ">>>", myel.text
 
-        for par in params:
+        for par in self.params:
             #print ">>>>>", par
             #print type(elements)
             if any(par in mystring.text for mystring in elements):
@@ -75,10 +76,10 @@ class CheckMMD():
         else:
             return False
 
-    def check_bounding_box(self,elements,root,bbox):
+    def check_bounding_box(self,elements,root):
         if len(elements) > 1:
             print "Found more than one element, not handling this now..."
-            return sys.exit(2)
+            return False
         #print ET.tostring(elements[0],pretty_print=True)
         # Decode bounding box from XML
         thisbb = []
@@ -95,13 +96,13 @@ class CheckMMD():
         # Check bounding box
         # Lists are ordered N, E, S, W
         print "This bounding box",thisbb
-        print "Reference bounding box",bbox
+        print "Reference bounding box",self.bbox
         latmatch = False
         lonmatch = False
-        if (thisbb[0] < bbox[0]) and (thisbb[2] > bbox[2]):
+        if (thisbb[0] < self.bbox[0]) and (thisbb[2] > self.bbox[2]):
             latmatch = True
             print "Latitude match"
-        if (thisbb[1] < bbox[1]) and (thisbb[3] > bbox[3]):
+        if (thisbb[1] < self.bbox[1]) and (thisbb[3] > self.bbox[3]):
             lonmatch = True
             print "Longitude match"
 
@@ -110,36 +111,60 @@ class CheckMMD():
         else:
             return False
             
-
     def check_mmd(self):
         mymatch = False
         mmd_file = self.mmd_file
-        params = self.params
         tmpcoll = self.coll
-        bbox = self.bbox
         tree = ET.ElementTree(file=mmd_file)
         root = tree.getroot()
         mynsmap = {'mmd':'http://www.met.no/schema/mmd'}
         #print ET.tostring(root)
 
+        setInactive = False
+        # Check for empty or incomplete bounding box
+        elements = tree.findall("mmd:geographic_extent",
+                namespaces=mynsmap)
+        if len(elements) != 1:
+            print "Error in bounding box (too few or too many)..."
+            setInactive = True
+        bboxfields = ['mmd:north','mmd:east','mmd:south','mmd:west']
+        for myel in elements:
+            for myfield in bboxfields:
+                myvalue = myel.find('mmd:rectangle/'+myfield,
+                        namespaces=root.nsmap).text
+                if myvalue == None:
+                    setInactive = True
+        # Check for multiple bounding box
+        # Check for multiple temporal periods
+        elements = tree.findall("mmd:temporal_extent",
+                namespaces=mynsmap)
+        if len(elements) != 1:
+            print "Too few or too many temporal extent elements..."
+            setInactive = True
+
+        if setInactive:
+            myelement = tree.find("mmd:metadata_status",
+                    namespaces=mynsmap)
+            myelement.text = "Inactive"
+
         # Check bounding box
-        if params:
+        if self.params:
             elements = tree.findall("mmd:keywords[@vocabulary='GCMD']/mmd:keyword",
                     namespaces=mynsmap)
-        if bbox:
+        if self.bbox:
             elements = tree.findall('mmd:geographic_extent/mmd:rectangle',
                     namespaces=mynsmap)
 
-        if not elements:
-            print "Did not find any elements of the type requested..."
-            return False
-        if bbox:
-            if self.check_bounding_box(elements,root,bbox):
+        #if not elements:
+        #    print "Did not find any elements of the type requested..."
+        #    return False
+        if self.bbox:
+            if self.check_bounding_box(elements,root):
                 mymatch = True
-        if params:
-            if self.check_params(elements,root,params):
+        if self.params:
+            if self.check_params(elements,root):
                 mymatch = True
-        if mymatch == False:
+        if mymatch == False and setInactive == False:
             return mymatch
 
         # Check if the collection is already added
@@ -154,22 +179,24 @@ class CheckMMD():
 
         if not tmpcoll:
             print "No collections left to check"
-            return mymatch
+            if not setInactive:
+                return mymatch
 
         # Add new collections
         myelement = tree.find('mmd:collection', namespaces=mynsmap)
 
         if myelement is None:
             print "No collection found"
-            return mymatch
+            if not setInactive:
+                return mymatch
         collection = myelement.getparent()
         for item in tmpcoll:
             collection.insert(collection.index(myelement),
                     ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>"+item+"</mmd:collection>"""))
         #print ET.tostring(tree)
-        print "Dumping information to file", mmd_file
+        #print "Dumping information to file", mmd_file
         tree = ET.ElementTree(collection)
-        print ">>>> ",self.mmd_file
+        #print ">>>> ",self.mmd_file
         tree.write(mmd_file, pretty_print=True)
 
         return mymatch
