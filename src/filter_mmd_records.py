@@ -45,15 +45,16 @@ def usage():
     print "\t-p|--parameters: specify parameters to extract (comma separated)"
     print "\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list"
     print "\t-c|--collection: specify the collection to add (comma separated)"
-    print "\t-g|--gcw: adds cryosphere parameters (and GCW collection)"
+    print "\t-g|--gcw: checks cryosphere parameters (and adds GCW collection)"
+    print "\t-s|--sios: checks bounding box (and adds SIOS collection)"
     sys.exit(2)
 
 class CheckMMD():
-    def __init__(self, mmd_file, bounding, parameters, collection):
+    def __init__(self, mmd_file, bounding, parameters, mycollection):
         self.mmd_file = mmd_file
         self.bbox = bounding
         self.params = parameters
-        self.coll = collection
+        self.coll = mycollection
 
     def check_params(self,elements,root):
 
@@ -148,20 +149,20 @@ class CheckMMD():
             myelement.text = "Inactive"
 
         # Check bounding box
-        if self.params:
+        if self.params and not setInactive:
             elements = tree.findall("mmd:keywords[@vocabulary='GCMD']/mmd:keyword",
                     namespaces=mynsmap)
-        if self.bbox:
+        if self.bbox and not setInactive:
             elements = tree.findall('mmd:geographic_extent/mmd:rectangle',
                     namespaces=mynsmap)
 
         #if not elements:
         #    print "Did not find any elements of the type requested..."
         #    return False
-        if self.bbox:
+        if self.bbox and not setInactive:
             if self.check_bounding_box(elements,root):
                 mymatch = True
-        if self.params:
+        if self.params and not setInactive:
             if self.check_params(elements,root):
                 mymatch = True
         if mymatch == False and setInactive == False:
@@ -169,13 +170,14 @@ class CheckMMD():
 
         # Check if the collection is already added
         #print ">>>>>>>>", mymatch
+        print tmpcoll
         for item in tmpcoll:
-            #print ">>>>>>>>>>>>>>>>>>>>>>>",item
+            print ">>>>>>>>>>>>>>>>>>>>>>>",item
             myel = '//mmd:collection[text()="'+item+'"]'
             myelement = tree.xpath(myel, namespaces=mynsmap)
             if myelement:
                 print "Already belongs to",item
-                tmpcoll.remove(item)
+                #tmpcoll.remove(item)
 
         if not tmpcoll:
             print "No collections left to check"
@@ -206,12 +208,14 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hc:p:b:l:g",
-                ["help","configuration","parameters","bounding","collection","gcw"])
+        opts, args = getopt.getopt(argv,"hc:p:b:l:gs",
+                ["help",
+                    "configuration","parameters","bounding",
+                    "collection","gcw","sios"])
     except getopt.GetoptError:
         usage()
 
-    cflg = pflg = bflg = lflg = gflg = False
+    cflg = pflg = bflg = lflg = gflg = sflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
@@ -229,10 +233,12 @@ def main(argv):
             lflg = True
         elif opt in ("-g","--gcw"):
             gflg = True
+        elif opt in ("-s","--sios"):
+            sflg = True
 
     if not cflg:
         usage()
-    elif not (lflg or gflg):
+    elif not (lflg or gflg or sflg):
         usage()
 
     # Define parameters to find
@@ -243,11 +249,15 @@ def main(argv):
         parameters = None
 
     # If filtering for GCW, parameters and collection are added automatic
+    bounding = None
     if gflg:
         parameters = ["CRYOSPHERE",
                 "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE",
                 "OCEANS &gt; SEA ICE"]
         collection = "GCW"
+    if sflg:
+        bounding = [90.,40.,70.,-20.]
+        collection = "SIOS"
 
     # Define collections to add
     if cflg:
@@ -261,12 +271,10 @@ def main(argv):
         cfg = yaml.load(ymlfile)
 
     # Define bounding box
-    # Provided as comma separated list (S,W,N,E)
+    # Provided as comma separated list (N,E,S,W)
     if bflg:
         bbox = bounding.split(",")
         bounding = [float(i) for i in bbox]
-    else:
-        bounding = None
 
     # Each section is a data centre to handle
     for section in cfg:
@@ -283,13 +291,14 @@ def main(argv):
 
         # Process files, dump valid filenames to file
         f = open("tmpfile.txt","w+")
-        i=0
+        i=1
         s = "/"
         for myfile in myfiles:
             if myfile.endswith(".xml"):
                 print i, myfile
                 i += 1
                 #inxml = ET.parse(s.join((indir,myfile)))
+                #print "####",collection
                 file2check = CheckMMD(s.join((cfg[section]['mmd'],myfile)),bounding, parameters, collection)
                 if file2check.check_mmd():
                     print "Success"
