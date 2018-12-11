@@ -13,6 +13,8 @@ AUTHOR:
     Øystein Godøy, METNO/FOU, 2018-03-27 
 
 UPDATED:
+    Øystein Godøy, METNO/FOU, 2018-12-11
+        Added filtering for NORMAP
     Øystein Godøy, METNO/FOU, 2018-12-08 
         Changed name, plus updated
     Øystein Godøy, METNO/FOU, 2018-06-23 
@@ -50,11 +52,25 @@ def usage():
     sys.exit(2)
 
 class CheckMMD():
-    def __init__(self, mmd_file, bounding, parameters, mycollection):
+    def __init__(self, mmd_file, bounding, parameters, mycollection,
+            project):
         self.mmd_file = mmd_file
         self.bbox = bounding
         self.params = parameters
         self.coll = mycollection
+        self.project = project
+
+    def check_project(self,elements,root):
+        projmatch = False
+        for proj in self.project:
+            if any(proj in mystring.text for mystring in elements):
+                projmatch = True
+
+        if projmatch:
+            return True
+        else:
+            return False
+
 
     def check_params(self,elements,root):
 
@@ -150,22 +166,29 @@ class CheckMMD():
 
         print "#####",setInactive
 
-        # Check bounding box
+        # Check parameters,bounding box and project
         if self.params and not setInactive:
             elements = tree.findall("mmd:keywords[@vocabulary='GCMD']/mmd:keyword",
                     namespaces=mynsmap)
         if self.bbox and not setInactive:
             elements = tree.findall('mmd:geographic_extent/mmd:rectangle',
                     namespaces=mynsmap)
+        if self.project and not setInactive:
+            elements = tree.findall('mmd:project/mmd:short_name',
+                    namespaces=mynsmap)
+        # Check information found
+        # some check of elements content...
 
-        #if not elements:
-        #    print "Did not find any elements of the type requested..."
-        #    return False
+
+        # Decide on test
         if self.bbox and not setInactive:
             if self.check_bounding_box(elements,root):
                 mymatch = True
         if self.params and not setInactive:
             if self.check_params(elements,root):
+                mymatch = True
+        if self.project and not setInactive:
+            if self.check_project(elements,root):
                 mymatch = True
         if mymatch == False and setInactive == False:
             return mymatch
@@ -196,14 +219,14 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hc:p:b:l:gs",
+        opts, args = getopt.getopt(argv,"hc:p:b:l:gsn",
                 ["help",
                     "configuration","parameters","bounding",
-                    "collection","gcw","sios"])
+                    "collection","gcw","sios","nmap"])
     except getopt.GetoptError:
         usage()
 
-    cflg = pflg = bflg = lflg = gflg = sflg = False
+    cflg = pflg = bflg = lflg = gflg = sflg = nflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
@@ -223,10 +246,12 @@ def main(argv):
             gflg = True
         elif opt in ("-s","--sios"):
             sflg = True
+        elif opt in ("-n","--nmap"):
+            nflg = True
 
     if not cflg:
         usage()
-    elif not (lflg or gflg or sflg):
+    elif not (lflg or gflg or sflg or nflg):
         usage()
 
     # Define parameters to find
@@ -237,7 +262,7 @@ def main(argv):
         parameters = None
 
     # If filtering for GCW, parameters and collection are added automatic
-    bounding = None
+    bounding = project = None
     if gflg:
         parameters = ["CRYOSPHERE",
                 "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE",
@@ -246,6 +271,9 @@ def main(argv):
     if sflg:
         bounding = [90.,40.,70.,-20.]
         collection = "SIOS"
+    if nflg:
+        project = "NORMAP"
+        collection = "NMAP"
 
     # Define collections to add
     if cflg:
@@ -266,6 +294,8 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
+        if section != "NERSC":
+            continue
         # Find files to process
         try:
             myfiles = os.listdir(cfg[section]['mmd'])
@@ -283,7 +313,8 @@ def main(argv):
                 i += 1
                 #inxml = ET.parse(s.join((indir,myfile)))
                 #print "####",collection
-                file2check = CheckMMD(s.join((cfg[section]['mmd'],myfile)),bounding, parameters, collection)
+                file2check = CheckMMD(s.join((cfg[section]['mmd'],myfile)),
+                        bounding, parameters, collection, project)
                 if file2check.check_mmd():
                     print "Success"
                 else:
