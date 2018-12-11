@@ -15,6 +15,8 @@ AUTHOR:
 UPDATED:
     Øystein Godøy, METNO/FOU, 2018-12-11
         Added filtering for NORMAP
+        Added check of time strings (temporary fix as SolR ingestion is
+        wrong)
     Øystein Godøy, METNO/FOU, 2018-12-08 
         Changed name, plus updated
     Øystein Godøy, METNO/FOU, 2018-06-23 
@@ -38,6 +40,8 @@ import lxml.etree as ET
 import codecs
 import re
 import yaml
+import datetime
+from dateutil.parser import parse
 
 def usage():
     print sys.argv[0]+" [options] input"
@@ -153,11 +157,21 @@ class CheckMMD():
                     setInactive = True
         # Check for multiple bounding box
         # Check for multiple temporal periods
+        # This should be removed as this is supported by the MMD
+        # specification, but not supproted by the SolR ingestion.
         elements = tree.findall("mmd:temporal_extent",
                 namespaces=mynsmap)
         if len(elements) != 1:
             print "Too few or too many temporal extent elements..."
             setInactive = True
+        # Check DateTime strings (to be removed later)
+        #print ET.tostring(elements[0])
+        for item in elements[0].iterdescendants():
+            #print type(item), item.tag, item.text
+            item.text = parse(item.text).date().strftime("%Y-%m-%d")
+            #print datetime.datetime.strptime(item.text,'%Y-%m-%d').date()
+        #print ET.tostring(elements[0])
+        #sys.exit() # while testing
 
         if setInactive:
             myelement = tree.find("mmd:metadata_status",
@@ -294,7 +308,7 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
-        if section != "NERSC":
+        if section != "NIPR-ADS":
             continue
         # Find files to process
         try:
