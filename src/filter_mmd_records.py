@@ -142,6 +142,7 @@ class CheckMMD():
         #print ET.tostring(root)
 
         setInactive = False
+        cnvDateTime = False
         # Check for empty or incomplete bounding box
         elements = tree.findall("mmd:geographic_extent",
                 namespaces=mynsmap)
@@ -168,8 +169,11 @@ class CheckMMD():
         #print ET.tostring(elements[0])
         for item in elements[0].iterdescendants():
             #print type(item), item.tag, item.text
-            item.text = parse(item.text).date().strftime("%Y-%m-%d")
-            #print datetime.datetime.strptime(item.text,'%Y-%m-%d').date()
+            if re.match('\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', item.text):
+                item.text = parse(item.text).date().strftime("%Y-%m-%d")
+                cnvDateTime = True
+                #print '....'
+            #print datetime.datetime.strptime(item.text,'%Y-%m-%d %H:%M:%S').date()
         #print ET.tostring(elements[0])
         #sys.exit() # while testing
 
@@ -178,7 +182,7 @@ class CheckMMD():
                     namespaces=mynsmap)
             myelement.text = "Inactive"
 
-        print "#####",setInactive
+        #print "#####",setInactive
 
         # Check parameters,bounding box and project
         if self.params and not setInactive:
@@ -204,7 +208,8 @@ class CheckMMD():
         if self.project and not setInactive:
             if self.check_project(elements,root):
                 mymatch = True
-        if mymatch == False and setInactive == False:
+        if (mymatch == False and 
+            setInactive == False and cnvDateTime == False):
             return mymatch
 
         # Check if the collection is already added, and add if not
@@ -308,8 +313,8 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
-        if section != "NIPR-ADS":
-            continue
+        #if section != "NIPR-ADS":
+        #    continue
         # Find files to process
         try:
             myfiles = os.listdir(cfg[section]['mmd'])

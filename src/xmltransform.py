@@ -172,13 +172,18 @@ def main(argv):
     for section in sorted(cfg.keys()):
         if section in ['BAS', 'CCIN', 'WGMS', 'NILU']:
             continue
+        #if section != 'NIPR-ADS':
+        #    continue
         indir = cfg[section]['raw']
         outdir = cfg[section]['mmd']
         if cfg[section]['mdkw'] in mydif:
             stylesheet =  '../etc/dif-to-mmd.xsl'
         elif cfg[section]['mdkw'] in myiso:
             stylesheet =  '../etc/iso-to-mmd.xsl'
-        mycollections = cfg[section]['collection'].replace(' ','')
+        if cfg[section]['collection']:
+            mycollections = cfg[section]['collection'].replace(' ','')
+        else:
+            mycollections = None
         #print mycollections.split(',')
 
         # Define stylesheet and modify accordingly
@@ -190,7 +195,7 @@ def main(argv):
             sys.exit(1)
         myroot = myxslt.getroot()
         # Find the location where to insert element
-        if cfg[section]['mdkw'] in mydif:
+        if cfg[section]['mdkw'] in mydif and mycollections:
             myelement = myxslt.find(".//xsl:element[@name='mmd:collection']",
                     namespaces=myroot.nsmap)
             if myelement is None:
