@@ -324,7 +324,7 @@ class MetadataHarvester(object):
                 self.write_to_file(isorec, isoid)
                 counter += 1
         else:
-            print "\trecords did not contain DIF elements"
+            print "\trecords did not contain ISO elements"
 
         print "\tNumber of records written to files", counter
         self.numRecHarv += counter
@@ -346,13 +346,15 @@ class MetadataHarvester(object):
         print "\tNumber of records found",len(record_elements)+1
         size_dif = len(record_elements)
 
+        counter = 0
         if size_dif != 0:
-            counter = 1
             for record in record_elements:
                 # Check header if deleted
                 #print ET.tostring(record)
                 datestamp = record.find('oai:header/oai:datestamp',
-                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'}).text
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
+                if datestamp != None:
+                    datestamp = datestamp.text
                 oaiid = record.find('oai:header/oai:identifier',
                         namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'}).text
                 delete_status = record.find("oai:header[@status='deleted']",
@@ -385,7 +387,7 @@ class MetadataHarvester(object):
                 self.write_to_file(difrec, difid)
                 counter += 1
         else:
-            print "\trecords did not contain DIF elements"
+            print "\tRecords did not contain DIF elements"
 
         print "\tNumber of records written to files", counter
         self.numRecHarv += counter
