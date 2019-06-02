@@ -10,6 +10,11 @@ AUTHOR:
     Øystein Godøy, METNO/FOU, 2018-03-27 
 
 UPDATED:
+    Øystein Godøy, METNO/FOU, 2019-02-24
+        Added support for single files.
+    Øystein Godøy, METNO/FOU, 2019-01-20
+        Modified searchng for collection, using xpath instead of find
+        Remember to double check DIF conversion again
     Øystein Godøy, METNO/FOU, 2018-11-28 
         Added utilisation of configuration file for mdharvest.
     Øystein Godøy, METNO/FOU, 2018-04-15 
@@ -74,7 +79,7 @@ def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
 
 
     # Process files
-    i=0
+    i=1
     s = "/"
     for myfile in myfiles:
         xmlfile = s.join((indir,myfile))
@@ -115,12 +120,12 @@ def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
 def main(argv):
     # This is the main method
     mydif = ['dif', 'gcmd']
-    myiso = ['iso']
+    myiso = ['iso','iso19139']
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hc:i:o:s:xp:f",
-                ["help","indir","outdir","style","xmd","parent","file"])
+        opts, args = getopt.getopt(argv,"hc:i:o:s:xp:f:",
+                ["help","cfg","indir","outdir","style","xmd","parent","file"])
     except getopt.GetoptError:
         usage()
 
@@ -146,9 +151,10 @@ def main(argv):
             parentUUID = arg
             pflg = True
         elif opt in ("-f","--file"):
+            xmlfile = arg
             fflg = True
 
-    if not cflg:
+    if not cflg and not fflg:
         usage()
     #elif not iflg:
     #    usage()
@@ -159,21 +165,43 @@ def main(argv):
     myflags = {'cflg':cflg, 'xflg':xflg, 'pflg': pflg}
 
     # Read config file
-    print "Reading", cfgfile
-    with open(cfgfile, 'r') as ymlfile:
-        cfg = yaml.load(ymlfile)
+    if not fflg:
+        print "Reading", cfgfile
+        with open(cfgfile, 'r') as ymlfile:
+            cfg = yaml.load(ymlfile)
 
     # Check that all relevant directories exists...
-    if check_directories(cfg):
-        print "Something went wrong creating directories"
-        sys.exit(2)
+    if not fflg:
+        if check_directories(cfg):
+            print "Something went wrong creating directories"
+            sys.exit(2)
+
+    if fflg:
+        # Define stylesheet and modify accordingly
+        parser = ET.XMLParser(remove_blank_text=True)
+        try:
+            myxslt = ET.parse(stylesheet, parser)
+        except ET.XMLSyntaxError,e:
+            print e
+            sys.exit(1)
+        mytransform = ET.XSLT(myxslt)
+        # Input file
+        inxml = ET.parse(xmlfile)
+        newxml = mytransform(inxml)
+        s = '/'
+        output = codecs.open(s.join((outdir,os.path.basename(xmlfile))),"w", "utf-8")
+        output.write(ET.tostring(newxml, pretty_print=True))
+        output.close()
+        sys.exit()
 
     # Each section is a data centre to harvest
     for section in sorted(cfg.keys()):
-        if section in ['BAS', 'CCIN', 'WGMS', 'NILU']:
-            continue
+        #if section in ['BAS', 'CCIN', 'WGMS', 'NILU']:
+        #    continue
         #if section != 'NIPR-ADS':
         #    continue
+        if section not in [ 'NILU','CCIN']:
+            continue
         indir = cfg[section]['raw']
         outdir = cfg[section]['mmd']
         if cfg[section]['mdkw'] in mydif:
@@ -195,22 +223,27 @@ def main(argv):
             sys.exit(1)
         myroot = myxslt.getroot()
         # Find the location where to insert element
-        if cfg[section]['mdkw'] in mydif and mycollections:
-            myelement = myxslt.find(".//xsl:element[@name='mmd:collection']",
-                    namespaces=myroot.nsmap)
-            if myelement is None:
+        if mycollections:
+            myelement = myxslt.xpath(".//xsl:element[@name='mmd:collection']",
+                    namespaces={
+                        'xsl':'http://www.w3.org/1999/XSL/Transform',
+                        'mmd':'http://www.met.no/schema/mmd'})
+            #myelement = myxslt.find(".//xsl:element[@name='mmd:collection']",
+            #        namespaces=myroot.nsmap)
+            #if myelement is None:
+            #    print "Can't find the requested element, bailing out"
+            #    sys.exit(2)
+            if len(myelement) == 0:
                 print "Can't find the requested element, bailing out"
                 sys.exit(2)
-            myparent = myelement.getparent()
+
+            myparent = myelement[0].getparent()
             for coll in mycollections.split(','):
                 myelem = ET.Element(ET.QName('http://www.w3.org/1999/XSL/Transform','element'),
                         attrib={'name':'mmd:collection'},
                         nsmap=myroot.nsmap)
                 myelem.text = coll
-                myparent.insert(myparent.index(myelement)+1,myelem)
-        elif cfg[section]['mdkw'] in myiso:
-            print "ISO is not supported yet..."
-            sys.exit()
+                myparent.insert(myparent.index(myelement[0])+1,myelem)
         myxslt.write('myfile.xsl',pretty_print=True)
         mytransform = ET.XSLT(myxslt)
 

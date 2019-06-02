@@ -13,6 +13,8 @@ AUTHOR:
     Øystein Godøy, METNO/FOU, 2018-03-27 
 
 UPDATED:
+    Øystein Godøy, METNO/FOU, 2018-12-12:
+        Added more filtering of time specifications.
     Øystein Godøy, METNO/FOU, 2018-12-11
         Added filtering for NORMAP
         Added check of time strings (temporary fix as SolR ingestion is
@@ -169,7 +171,11 @@ class CheckMMD():
         #print ET.tostring(elements[0])
         for item in elements[0].iterdescendants():
             #print type(item), item.tag, item.text
-            if re.match('\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', item.text):
+            if re.match('\d{4}-\d{2}-\d{2}Z', item.text):
+                #item.text = parse(item.text).date().strftime("%Y-%m-%d")
+                item.text = item.text[:-1]
+                cnvDateTime = True
+            elif re.match('\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', item.text):
                 item.text = parse(item.text).date().strftime("%Y-%m-%d")
                 cnvDateTime = True
                 #print '....'
@@ -313,8 +319,8 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
-        #if section != "NIPR-ADS":
-        #    continue
+        if section != "NERSC":
+            continue
         # Find files to process
         try:
             myfiles = os.listdir(cfg[section]['mmd'])

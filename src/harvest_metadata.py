@@ -426,8 +426,15 @@ class MetadataHarvester(object):
         try:
             if not credentials:
                 file = ul2.urlopen(URL,timeout=60) # Timeout depends on user
-                #data = file.read()
-                data = ET.parse(file)
+                data = file.read()
+                f = open('myharvest.xml','w+')
+                f.write(data.encode('utf8'))
+                f.close()
+                sys.exit()
+                try:
+                    data = ET.parse(file)
+                except Exception as e:
+                    print('Parsing the harvested information failed due to', e)
                 file.close()
                 return data
             else:

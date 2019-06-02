@@ -91,7 +91,7 @@ def main(argv):
 
     # Each section is a data centre to harvest
     for section in cfg:
-        if section == 'CCIN':
+        if section != 'NILU':
             continue
         if cfg[section]['protocol'] == 'OAI-PMH':
             if cfg[section]['set']:
