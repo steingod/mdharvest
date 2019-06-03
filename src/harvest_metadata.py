@@ -14,6 +14,8 @@ UPDATED:    Øystein Godøy, METNO/FOU, 2017-12-12
                 Working version for OAI-PMH with lxml
             Øystein Godøy, METNO/FOU, 2018-05-10 
                 Working version with OGC CSW as well
+            Øystein Godøy, METNO/FOU, 2019-06-03 
+                Better handling of character encoding.
 
 USAGE:
     - See usage
@@ -278,6 +280,7 @@ class MetadataHarvester(object):
         myns = {
                 'oai':'http://www.openarchives.org/OAI/2.0/',
                 'gmd':'http://www.isotc211.org/2005/gmd',
+                'gmi':'http://www.isotc211.org/2005/gmi',
                 'gco':'http://www.isotc211.org/2005/gco',
                 'gml':'http://www.opengis.net/gml/3.2'
                 }
@@ -286,6 +289,7 @@ class MetadataHarvester(object):
         print "\tNumber of records found",len(record_elements)+1
         size_dif = len(record_elements)
 
+        counter = 0
         if size_dif != 0:
             counter = 1
             for record in record_elements:
@@ -303,30 +307,30 @@ class MetadataHarvester(object):
                 if delete_status != None:
                     print "This record has been deleted"+"\n\t",oaiid
                     #print ">>>status", counter, delete_status, len(delete_status)
-                isoid = record.find('oai:metadata/gmd:MD_Metadata/gmd:fileIdentifier/gco:CharacterString',
+                isoid = record.find('oai:metadata/gmi:MI_Metadata/gmd:fileIdentifier/gco:CharacterString',
                         namespaces=myns)
+                if isoid == None:
+                    isoid = record.find('oai:metadata/gmd:MD_Metadata/gmd:fileIdentifier/gco:CharacterString',
+                            namespaces=myns)
+                    print('Here I am',isoid)
                 if isoid == None:
                     print "Skipping record, no ISO ID"
                     continue
                 isoid = isoid.text
-##               if oaiid != isoid:
-##                   if isoid not in oaiid:
-##                       print "\tErrors in identifiers, skipping record!!!"
-##                       print "\toaiid", oaiid
-##                       print "\tisoid", isoid
-##                       continue
-##                   else:
-##                       print "Mismatch between OAI and DIF identifiers, using DIF identifiers"
                 isorec = record.find('oai:metadata/gmd:MD_Metadata',
                         namespaces=myns)
+                if isorec == None:
+                    isorec = record.find('oai:metadata/gmi:MI_Metadata',
+                            namespaces=myns)
+                if isorec == None:
+                    continue
 
                 # Dump to file
                 self.write_to_file(isorec, isoid)
-                counter += 1
+            print "\tNumber of records written to files", counter
         else:
             print "\trecords did not contain ISO elements"
 
-        print "\tNumber of records written to files", counter
         self.numRecHarv += counter
 
         return
@@ -425,17 +429,20 @@ class MetadataHarvester(object):
         """ Function for harvesting content from URL."""
         try:
             if not credentials:
-                file = ul2.urlopen(URL,timeout=60) # Timeout depends on user
-                data = file.read()
-                f = open('myharvest.xml','w+')
-                f.write(data.encode('utf8'))
-                f.close()
-                sys.exit()
+                myfile = ul2.urlopen(URL,timeout=60) # Timeout depends on user
+                #data = myfile.read()
+                myencoding = myfile.headers.getparam('charset')
+                myparser = ET.XMLParser(ns_clean=True, encoding=myencoding)
+                #data =  myfile.read().decode(myfile.headers.getparam('charset'))
+                #f = open('myharvest.xml','w+')
+                #f.write(data.encode('utf-8'))
+                #f.close()
+                #sys.exit()
                 try:
-                    data = ET.parse(file)
+                    data = ET.parse(myfile, myparser)
                 except Exception as e:
                     print('Parsing the harvested information failed due to', e)
-                file.close()
+                myfile.close()
                 return data
             else:
                 # Not working with lxml
