@@ -89,10 +89,13 @@ def main(argv):
    # Overwrite metadata_identifier in input file
    try:
        myexistingid = root.find('{http://www.met.no/schema/mmd}metadata_identifier')
+       myexistingid.text = str(myidentifier)
    except:
-       print "No metadata identifier was found in this file, continuing..."
+       print "No metadata identifier was found in this file, creating this..."
+       myid = ET.Element('mmd:metadata_identifier')
+       myid.text = str(myidentifier)
+       root.insert(0, myid)
 
-   myexistingid.text = str(myidentifier)
    tree.write(infile,
            xml_declaration=True,encoding='UTF-8',
            method="xml")
