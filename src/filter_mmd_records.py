@@ -50,16 +50,18 @@ def usage():
     print "\t-h|--help: dump this information"
     print "\t-c|--configuration: specify where to find the configuration file"
     print "\t-l|--collection: specify collection to tag the dataset with"
-    print "\t-p|--parameters: specify parameters to extract (comma separated)"
+    print "\t-p|--parameters: specify parameters to filter on (comma separated)"
     print "\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list"
-    print "\t-c|--collection: specify the collection to add (comma separated)"
     print "\t-g|--gcw: checks cryosphere parameters (and adds GCW collection)"
     print "\t-s|--sios: checks bounding box (and adds SIOS collection)"
+    print "\t-n|--nmap: checks project affiliation (and adds NMAP collection)"
+    print("Options g, s and n cannot be used simultaneously")
     sys.exit(2)
 
-class CheckMMD():
-    def __init__(self, mmd_file, bounding, parameters, mycollection,
+class LocalCheckMMD():
+    def __init__(self, section, mmd_file, bounding, parameters, mycollection,
             project):
+        self.section = section
         self.mmd_file = mmd_file
         self.bbox = bounding
         self.params = parameters
@@ -100,6 +102,7 @@ class CheckMMD():
             return False
 
     def check_bounding_box(self,elements,root):
+        print("####",elements)
         if len(elements) > 1:
             print "Found more than one element, not handling this now..."
             return False
@@ -120,6 +123,8 @@ class CheckMMD():
         # Lists are ordered N, E, S, W
         print "This bounding box",thisbb
         print "Reference bounding box",self.bbox
+        if len(thisbb)==0:
+            return(False)
         latmatch = False
         lonmatch = False
         if (thisbb[0] < self.bbox[0]) and (thisbb[2] > self.bbox[2]):
@@ -137,7 +142,8 @@ class CheckMMD():
     def check_mmd(self):
         mymatch = False
         mmd_file = self.mmd_file
-        tmpcoll = self.coll
+        tmpcoll = []
+        tmpcoll.append(self.coll)
         tree = ET.ElementTree(file=mmd_file)
         root = tree.getroot()
         mynsmap = {'mmd':'http://www.met.no/schema/mmd'}
@@ -145,43 +151,46 @@ class CheckMMD():
 
         setInactive = False
         cnvDateTime = False
-        # Check for empty or incomplete bounding box
-        elements = tree.findall("mmd:geographic_extent",
-                namespaces=mynsmap)
-        if len(elements) != 1:
-            print "Error in bounding box (too few or too many)..."
-            setInactive = True
-        bboxfields = ['mmd:north','mmd:east','mmd:south','mmd:west']
-        for myel in elements:
-            for myfield in bboxfields:
-                myvalue = myel.find('mmd:rectangle/'+myfield,
-                        namespaces=root.nsmap).text
-                if myvalue == None or myvalue.isspace():
-                    setInactive = True
-        # Check for multiple bounding box
-        # Check for multiple temporal periods
-        # This should be removed as this is supported by the MMD
-        # specification, but not supproted by the SolR ingestion.
-        elements = tree.findall("mmd:temporal_extent",
-                namespaces=mynsmap)
-        if len(elements) != 1:
-            print "Too few or too many temporal extent elements..."
-            setInactive = True
-        # Check DateTime strings (to be removed later)
-        #print ET.tostring(elements[0])
-        for item in elements[0].iterdescendants():
-            #print type(item), item.tag, item.text
-            if re.match('\d{4}-\d{2}-\d{2}Z', item.text):
-                #item.text = parse(item.text).date().strftime("%Y-%m-%d")
-                item.text = item.text[:-1]
-                cnvDateTime = True
-            elif re.match('\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', item.text):
-                item.text = parse(item.text).date().strftime("%Y-%m-%d")
-                cnvDateTime = True
-                #print '....'
-            #print datetime.datetime.strptime(item.text,'%Y-%m-%d %H:%M:%S').date()
-        #print ET.tostring(elements[0])
-        #sys.exit() # while testing
+        # Set all NPI records hosted by IMR for NMDC to inactive
+        if self.section == "IMR":
+            myvalue = tree.find("mmd:data_center/mmd:data_center_name/mmd:long_name",
+                namespaces=mynsmap).text
+            if myvalue in ["Norwegian Polar Institute"]:
+                setInactive = True
+        if not setInactive:
+            # Check for empty or incomplete bounding box
+            # Add check for multiple bounding box
+            elements = tree.findall("mmd:geographic_extent",
+                    namespaces=mynsmap)
+            if len(elements) != 1:
+                print "Error in bounding box (too few or too many)..."
+                setInactive = True
+            bboxfields = ['mmd:north','mmd:east','mmd:south','mmd:west']
+            for myel in elements:
+                for myfield in bboxfields:
+                    myvalue = myel.find('mmd:rectangle/'+myfield,
+                            namespaces=root.nsmap).text
+                    if myvalue == None or myvalue.isspace():
+                        setInactive = True
+            # Check for multiple temporal periods
+            # This should be removed as this is supported by the MMD
+            # specification, but not supproted by the SolR ingestion.
+            elements = tree.findall("mmd:temporal_extent",
+                    namespaces=mynsmap)
+            if len(elements) != 1:
+                print "Too few or too many temporal extent elements..."
+                setInactive = True
+            # Check DateTime strings (to be removed later)
+            if not setInactive:
+                for item in elements[0].iterdescendants():
+                    #print type(item), item.tag, item.text
+                    if re.match('\d{4}-\d{2}-\d{2}Z', item.text):
+                        #item.text = parse(item.text).date().strftime("%Y-%m-%d")
+                        item.text = item.text[:-1]
+                        cnvDateTime = True
+                    elif re.match('\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', item.text):
+                        item.text = parse(item.text).date().strftime("%Y-%m-%d")
+                        cnvDateTime = True
 
         if setInactive:
             myelement = tree.find("mmd:metadata_status",
@@ -219,7 +228,6 @@ class CheckMMD():
             return mymatch
 
         # Check if the collection is already added, and add if not
-        #print tmpcoll
         if mymatch:
             for item in tmpcoll:
                 myel = '//mmd:collection[text()="'+item+'"]'
@@ -278,6 +286,8 @@ def main(argv):
         usage()
     elif not (lflg or gflg or sflg or nflg):
         usage()
+    if (nflg and sflg) or (sflg and gflg) or (nflg and gflg):
+        usage()
 
     # Define parameters to find
     # Not working yet...
@@ -301,9 +311,9 @@ def main(argv):
         collection = "NMAP"
 
     # Define collections to add
-    if cflg:
+    if lflg:
         collection = collection.split(',')
-    else:
+    elif ((not sflg) and (not gflg) and (not nflg)):
         collection = None
 
     # Read config file
@@ -319,7 +329,7 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
-        if section != "NERSC":
+        if section not in ["NPI","IMR"]:
             continue
         # Find files to process
         try:
@@ -336,9 +346,7 @@ def main(argv):
             if myfile.endswith(".xml"):
                 print i, myfile
                 i += 1
-                #inxml = ET.parse(s.join((indir,myfile)))
-                #print "####",collection
-                file2check = CheckMMD(s.join((cfg[section]['mmd'],myfile)),
+                file2check = LocalCheckMMD(section,s.join((cfg[section]['mmd'],myfile)),
                         bounding, parameters, collection, project)
                 if file2check.check_mmd():
                     print "Success"
