@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:skos="http://www.w3.org/2004/02/skos/core#">
+  <skos:Concept>
+    <skos:prefLabel>inlandWaters</skos:prefLabel>
+    <skos:altLabel>INLAND WATERS</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>intelligenceMilitary</skos:prefLabel>
+    <skos:altLabel>INTELLIGENCE/MILITARY</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>climatologyMeteorologyAtmosphere</skos:prefLabel>
+    <skos:altLabel>CLIMATOLOGY/METEOROLOGY/ATMOSPHERE</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>utilitiesCommunications</skos:prefLabel>
+    <skos:altLabel>UTILITIES/COMMUNICATIONS</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>farming</skos:prefLabel>
+    <skos:altLabel>FARMING</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>imageryBaseMapsEarthCover</skos:prefLabel>
+    <skos:altLabel>IMAGERY/BASE MAPS/EARTH COVER</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>structure</skos:prefLabel>
+    <skos:altLabel>STRUCTURE</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>health</skos:prefLabel>
+    <skos:altLabel>HEALTH</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>elevation</skos:prefLabel>
+    <skos:altLabel>ELEVATION</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>society</skos:prefLabel>
+    <skos:altLabel>SOCIETY</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>environment</skos:prefLabel>
+    <skos:altLabel>ENVIRONMENT</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>extraTerrestrial</skos:prefLabel>
+    <skos:altLabel>EXTRA TERRESTRIAL</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>biota</skos:prefLabel>
+    <skos:altLabel>BIOTA</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>disaster</skos:prefLabel>
+    <skos:altLabel>DISASTER</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>transportation</skos:prefLabel>
+    <skos:altLabel>TRANSPORTATION</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>geoscientificInformation</skos:prefLabel>
+    <skos:altLabel>GEOSCIENTIFIC INFORMATION</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>oceans</skos:prefLabel>
+    <skos:altLabel>OCEANS</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>economy</skos:prefLabel>
+    <skos:altLabel>ECONOMY</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>planningCadastre</skos:prefLabel>
+    <skos:altLabel>PLANNING CADASTRE</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>location</skos:prefLabel>
+    <skos:altLabel>LOCATION</skos:altLabel>
+  </skos:Concept>
+  <skos:Concept>
+    <skos:prefLabel>boundaries</skos:prefLabel>
+    <skos:altLabel>BOUNDARIES</skos:altLabel>
+  </skos:Concept>
+</rdf:RDF>
