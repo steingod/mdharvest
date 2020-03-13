@@ -52,10 +52,12 @@ def usage():
     print "\t-l|--collection: specify collection to tag the dataset with"
     print "\t-p|--parameters: specify parameters to filter on (comma separated)"
     print "\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list"
+    print "\t-a|--aen: checks project affiliation and adds Nansen Legacy collection"
     print "\t-g|--gcw: checks cryosphere parameters (and adds GCW collection)"
     print "\t-s|--sios: checks bounding box (and adds SIOS collection)"
+    print "\t-i|--infranor: checks project affiliation and adds InfraNOR collection"
     print "\t-n|--nmap: checks project affiliation (and adds NMAP collection)"
-    print("Options g, s and n cannot be used simultaneously")
+    print("Options a, g, i, n, and s cannot be used simultaneously")
     sys.exit(2)
 
 class LocalCheckMMD():
@@ -197,8 +199,6 @@ class LocalCheckMMD():
                     namespaces=mynsmap)
             myelement.text = "Inactive"
 
-        #print "#####",setInactive
-
         # Check parameters,bounding box and project
         if self.params and not setInactive:
             elements = tree.findall("mmd:keywords[@vocabulary='GCMD']/mmd:keyword",
@@ -209,6 +209,9 @@ class LocalCheckMMD():
         if self.project and not setInactive:
             elements = tree.findall('mmd:project/mmd:short_name',
                     namespaces=mynsmap)
+            for el in elements:
+                if el.text == None:
+                    setInactive = True
         # Check information found
         # some check of elements content...
 
@@ -252,14 +255,14 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hc:p:b:l:gsn",
+        opts, args = getopt.getopt(argv,"hc:p:b:l:gsnai",
                 ["help",
                     "configuration","parameters","bounding",
-                    "collection","gcw","sios","nmap"])
+                    "collection","gcw","sios","nmap","aen","infranor"])
     except getopt.GetoptError:
         usage()
 
-    cflg = pflg = bflg = lflg = gflg = sflg = nflg = False
+    cflg = pflg = bflg = lflg = gflg = sflg = nflg = aflg = iflg = False
     for opt, arg in opts:
         if opt == ("-h","--help"):
             usage()
@@ -275,16 +278,20 @@ def main(argv):
         elif opt in ("-l","--collection"):
             collection = arg
             lflg = True
+        elif opt in ("-a","--aen"):
+            aflg = True
         elif opt in ("-g","--gcw"):
             gflg = True
         elif opt in ("-s","--sios"):
             sflg = True
+        elif opt in ("-i","--infranor"):
+            iflg = True
         elif opt in ("-n","--nmap"):
             nflg = True
 
     if not cflg:
         usage()
-    elif not (lflg or gflg or sflg or nflg):
+    elif not (lflg or gflg or sflg or nflg or iflg or aflg):
         usage()
     if (nflg and sflg) or (sflg and gflg) or (nflg and gflg):
         usage()
@@ -303,17 +310,23 @@ def main(argv):
                 "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE",
                 "OCEANS &gt; SEA ICE"]
         collection = "GCW"
-    if sflg:
+    elif aflg:
+        project = "Nansen Legacy"
+        collection = "AeN"
+    elif sflg:
         bounding = [90.,40.,70.,-20.]
         collection = "SIOS"
-    if nflg:
+    elif iflg:
+        project = "INFRANOR"
+        collection = "INFRANOR"
+    elif nflg:
         project = "NORMAP"
         collection = "NMAP"
 
     # Define collections to add
     if lflg:
         collection = collection.split(',')
-    elif ((not sflg) and (not gflg) and (not nflg)):
+    elif ((not sflg) and (not gflg) and (not nflg) and (not aflg) and (not iflg)):
         collection = None
 
     # Read config file
@@ -329,7 +342,7 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
-        if section not in ["NPI","IMR"]:
+        if section not in ["NPI","IMR","NERSC-NORMAP","NERSC-INFRANOR"]:
             continue
         # Find files to process
         try:
