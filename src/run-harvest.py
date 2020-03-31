@@ -28,13 +28,14 @@ import os
 import getopt
 import yaml
 from harvest_metadata import MetadataHarvester
+import logging
 
 def usage():
-    print sys.argv[0]+" [options] input"
-    print "\t-h|--help: dump this information"
-    print "\t-c|--config: specify the configuration file to use"
-    print "\t-l|--logfile: specify the logfile to use"
-    print "\t-f|--from: specify DateTime to harvest from"
+    print(sys.argv[0]+" [options] input")
+    print("\t-h|--help: dump this information")
+    print("\t-c|--config: specify the configuration file to use")
+    print("\t-l|--logfile: specify the logfile to use")
+    print("\t-f|--from: specify DateTime to harvest from")
     sys.exit(2)
 
 def check_directories(cfg):
@@ -46,7 +47,7 @@ def check_directories(cfg):
                try:
                    os.makedirs(cfg[section][name])
                except:
-                   print "Could not create output directory"
+                   print("Could not create output directory")
                    return(2)
     return(0)
 
@@ -79,20 +80,37 @@ def main(argv):
     elif not lflg:
         usage()
 
+    # Set up logging
+    logging.basicConfig(filename=logfile,level=logging.INFO,
+            format='%(asctime)s %(message)s')
+    logging.info("\n===============================================")
+    #logging.debug('This message should go to the log file')
+    #logging.info('So should this')
+    #logging.warning('And this, too')
+
     # Read config file
-    print "Reading", cfgfile
+    print("Reading", cfgfile)
+    logging.info("Reading "+cfgfile)
     with open(cfgfile, 'r') as ymlfile:
         cfg = yaml.load(ymlfile)
 
     # Check that all relevant directories exists...
     if check_directories(cfg):
-        print "Something went wrong creating directories"
+        warnings.warn("Something went wrong creating directories")
         sys.exit(2)
 
     # Each section is a data centre to harvest
     for section in cfg:
-        if section != 'NILU':
+        #if section not in ['PPD']:
+        #    continue
+        if section not in ['PPD','NERSC-NORMAP','NERSC-INFRANOR','IMR']:
             continue
+        #if (section != 'CNR-test'):
+        #    continue
+        #if (section not in ['PANGAEA-YOPP','NIPR-ADS-YOPP']):
+        #    continue
+        print('Checking: ', section)
+        logging.info('Checking: '+section)
         if cfg[section]['protocol'] == 'OAI-PMH':
             if cfg[section]['set']:
                 if fflg:
@@ -119,8 +137,9 @@ def main(argv):
                     "&resultType=results"\
                     "&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full"
         else:
-            print "Protocol not supported yet"
-        print request
+            print("Protocol not supported yet")
+            logging.warn("Protocol not supported yet")
+        print(request)
         numRec = 0
         mh = MetadataHarvester(cfg[section]['source'],
                 request,cfg[section]['raw'],
@@ -128,11 +147,15 @@ def main(argv):
                 cfg[section]['mdkw'])
         try: 
             numRec = mh.harvest()
-        except Exception, e:
-            print "Something went wrong on harvest from", section
-            print str(e)
-        print "Number of records harvested", section, numRec
+        except Exception as e:
+            print("Something went wrong on harvest from", section)
+            print(str(e))
+            logging.warn("Something went wrong on harvest from "+section)
+            logging.warn(str(e))
+        print("Number of records harvested", section, numRec)
+        logging.info("Number of records harvested "+section+': '+str(numRec))
 
+    logging.shutdown()
     sys.exit(0)
 
 if __name__ == '__main__':

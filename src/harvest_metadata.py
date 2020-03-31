@@ -39,13 +39,13 @@ from datetime import datetime
 import lxml.etree as ET
 
 def usage():
-    print sys.argv[0]+" [options] input"
-    print "\t-h|--help: dump this information"
-    print "\t-p|--protocol: specify the protocol to use"
-    print "\t-s|--set: specify set to harvest (only used for OAI-PMH)"
-    print "\t-f|--format: specify the file format to use (only used for OAI-PMH)"
-    print "\t-u|--url: specify the URL to use for the service provider"
-    print "\t-d|--destination: specify the local destination"
+    print(sys.argv[0]+" [options] input")
+    print("\t-h|--help: dump this information")
+    print("\t-p|--protocol: specify the protocol to use")
+    print("\t-s|--set: specify set to harvest (only used for OAI-PMH)")
+    print("\t-f|--format: specify the file format to use (only used for OAI-PMH)")
+    print("\t-u|--url: specify the URL to use for the service provider")
+    print("\t-d|--destination: specify the local destination")
     sys.exit(2)
 
 class MetadataHarvester(object):
@@ -76,7 +76,7 @@ class MetadataHarvester(object):
             # Could/should be more sophistiated by means of deciding url
             # properties
             getRecordsURL = str(baseURL + records)
-            print "Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol)
+            print("Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol))
             start_time = datetime.now()
 
             # Initial phase
@@ -89,7 +89,7 @@ class MetadataHarvester(object):
                 else:
                     raise "Metadata format not supported yet."
             else:
-                print "Server is not responding properly"
+                print("Server is not responding properly")
                 raise IOError("Server to harvest is not responding properly")
                 return(0)
             pageCounter = 1
@@ -103,7 +103,7 @@ class MetadataHarvester(object):
             # Manage resumptionToken, i.e. segmentation of results in
             # pages
             while resumptionToken != None:
-                print "\n\tHandling resumptionToken: %.0f" % pageCounter
+                print("\n\tHandling resumptionToken: %.0f" % pageCounter)
                 resumptionToken = ul.urlencode({'resumptionToken':resumptionToken}) # create resumptionToken URL parameter
                 getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
                 dom = self.harvestContent(getRecordsURLLoop)
@@ -115,7 +115,7 @@ class MetadataHarvester(object):
                     else:
                         raise "Metadata format not supported yet."
                 else:
-                    print "dom = " + str(dom) + ', for page ' + str(pageCounter)
+                    print("dom = " + str(dom) + ', for page ' + str(pageCounter))
 
                 resumptionToken = dom.find(
                         'oai:ListRecords/oai:resumptionToken',
@@ -125,23 +125,23 @@ class MetadataHarvester(object):
                     resumptionToken = resumptionToken.text
                 pageCounter += 1
 
-            print "Harvesting completed"
-            print "Harvesting took: %s [h:mm:ss]" % str(datetime.now()-start_time)
-            print "Number of records successfully harvested", self.numRecHarv
+            print("Harvesting completed")
+            print("Harvesting took: %s [h:mm:ss]" % str(datetime.now()-start_time))
+            print("Number of records successfully harvested", self.numRecHarv)
 
         elif hProtocol == 'OGC-CSW':
             getRecordsURL = str(baseURL + records)
-            print "Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol)
+            print("Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol))
             start_time = datetime.now()
             dom = self.harvestContent(getRecordsURL)
             if dom == None:
-                print "Server is not responding properly"
+                print("Server is not responding properly")
                 raise IOError("Server to harvest is not responding properly")
                 return(0)
             cswHeader = dom.find('csw:SearchResults',
                     namespaces={'csw':'http://www.opengis.net/cat/csw/2.0.2'})
             if cswHeader == None:
-                print "Could not parse header response"
+                print("Could not parse header response")
                 sys.exit(2)
             numRecs = int(cswHeader.get("numberOfRecordsMatched"))
             nextRec =  int(cswHeader.get('nextRecord'))
@@ -161,13 +161,13 @@ class MetadataHarvester(object):
                 if nextRec == 0:
                     break
 
-            print "Harvesting completed"
-            print "Harvesting took: %s [h:mm:ss]" % str(datetime.now()-start_time)
-            print "Number of records successfully harvested", self.numRecHarv
+            print("Harvesting completed")
+            print("Harvesting took: %s [h:mm:ss]" % str(datetime.now()-start_time))
+            print("Number of records successfully harvested", self.numRecHarv)
 
         elif hProtocol == "OpenSearch":
             getRecordsURL = str(baseURL + records)
-            print "Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol)
+            print("Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol))
             start_time = datetime.now()
 
             dom = self.harvestContent(getRecordsURL,credentials=True,uname=uname,pw=pw)
@@ -187,9 +187,10 @@ class MetadataHarvester(object):
 
             # looping through the rest of the results updating start and rows values
             if totalResults > itemsPerPage:
-                print "\nCould not display all results on single page. Starts iterating..."
+                print("\nCould not display all results on single page.  Starts iterating...")
             while current_results < totalResults:
-                print "\n\n\tHandling results (%s - %s) / %s" %(current_results, current_results + itemsPerPage, totalResults)
+                print("\n\n\tHandling results (%s - %s) / %s" %(current_results, current_results + itemsPerPage,
+                            totalResults))
                 from_to = "?start=%s&rows=%s&" % (current_results,itemsPerPage)
                 getRecordsURLLoop = str(baseURL + from_to + records[1:])
                 dom = self.harvestContent(getRecordsURLLoop,credentials=True,uname=uname,pw=pw)
@@ -197,10 +198,10 @@ class MetadataHarvester(object):
                     self.openSearch_writeENTRYtoFile(dom)
                 current_results += itemsPerPage
 
-            print "\n\nHarvesting took: %s [h:mm:ss]\n" % str(datetime.now()-start_time)
+            print("\n\nHarvesting took: %s [h:mm:ss]\n" % str(datetime.now()-start_time))
 
         else:
-            print '\nProtocol %s is not accepted.' % hProtocol
+            print('\nProtocol %s is not accepted.' % hProtocol)
             raise IOError("Protocol is not accepted")
 
         return(self.numRecHarv)
@@ -210,7 +211,7 @@ class MetadataHarvester(object):
         print("Writing OpenSearch ENTRY metadata elements to disk... ")
 
         entries = dom.getElementsByTagName('entry')
-        print "\tFound %.f ENTRY elements." % entries.length
+        print("\tFound %.f ENTRY elements." % entries.length)
         counter = 1
         has_fname = False
         for entry in entries:
@@ -255,7 +256,7 @@ class MetadataHarvester(object):
 ##       if len(record_elements) != self.numRecsReturned:
 ##           print "Mismatch in number of records, bailing out"
 ##           sys.exit(2)
-        print "\tNumber of records found",len(record_elements)
+        print("\tNumber of records found",len(record_elements))
 
         numRecs = len(record_elements)
 
@@ -264,12 +265,12 @@ class MetadataHarvester(object):
             cswid = record.find('gmd:fileIdentifier/gco:CharacterString',
                     namespaces=myns)
             if cswid == None:
-                print "Skipping record, no FileID"
+                print("Skipping record, no FileID")
                 continue
             # Dump to file...
             self.write_to_file(record, cswid.text)
             counter += 1
-        print "\tNumber of records written", counter
+        print("\tNumber of records written", counter)
         self.numRecHarv += counter
         return
 
@@ -286,12 +287,12 @@ class MetadataHarvester(object):
                 }
         record_elements =  dom.xpath('/oai:OAI-PMH/oai:ListRecords/oai:record', 
                 namespaces=myns)
-        print "\tNumber of records found",len(record_elements)+1
+        print("\tNumber of records found",len(record_elements)+1)
         size_dif = len(record_elements)
 
         counter = 0
         if size_dif != 0:
-            counter = 1
+            #counter = 1
             for record in record_elements:
                 # Check header if deleted
                 datestamp = record.find('oai:header/oai:datestamp',
@@ -305,8 +306,7 @@ class MetadataHarvester(object):
                 # Challenges arise when oaiid and isoid are different as
                 # isoid is used as the filename...
                 if delete_status != None:
-                    print "This record has been deleted"+"\n\t",oaiid
-                    #print ">>>status", counter, delete_status, len(delete_status)
+                    print("This record has been deleted"+"\n\t",oaiid)
                 isoid = record.find('oai:metadata/gmi:MI_Metadata/gmd:fileIdentifier/gco:CharacterString',
                         namespaces=myns)
                 if isoid == None:
@@ -314,7 +314,7 @@ class MetadataHarvester(object):
                             namespaces=myns)
                     print('Here I am',isoid)
                 if isoid == None:
-                    print "Skipping record, no ISO ID"
+                    print("Skipping record, no ISO ID")
                     continue
                 isoid = isoid.text
                 isorec = record.find('oai:metadata/gmd:MD_Metadata',
@@ -327,14 +327,14 @@ class MetadataHarvester(object):
 
                 # Dump to file
                 self.write_to_file(isorec, isoid)
-            print "\tNumber of records written to files", counter
+                counter += 1
+            print("\tNumber of records written to files", counter)
         else:
-            print "\trecords did not contain ISO elements"
+            print("\trecords did not contain ISO elements")
 
         self.numRecHarv += counter
 
         return
-
 
     def oaipmh_writeDIFtoFile(self,dom):
         """ 
@@ -347,7 +347,7 @@ class MetadataHarvester(object):
                 }
         record_elements =  dom.xpath('/oai:OAI-PMH/oai:ListRecords/oai:record', 
                 namespaces=myns)
-        print "\tNumber of records found",len(record_elements)+1
+        print("\tNumber of records found",len(record_elements)+1)
         size_dif = len(record_elements)
 
         counter = 0
@@ -368,12 +368,12 @@ class MetadataHarvester(object):
                 # Cahallenges arise when oaiid and difid are different as
                 # difid is used as the filename...
                 if delete_status != None:
-                    print "This record has been deleted"+"\n\t",oaiid
+                    print("This record has been deleted"+"\n\t",oaiid)
                     #print ">>>status", counter, delete_status, len(delete_status)
                 difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID',
                         namespaces=myns)
                 if difid == None:
-                    print "Skipping record, no DIF ID"
+                    print("Skipping record, no DIF ID")
                     continue
                 difid = difid.text
 ##               if oaiid != difid:
@@ -391,9 +391,9 @@ class MetadataHarvester(object):
                 self.write_to_file(difrec, difid)
                 counter += 1
         else:
-            print "\tRecords did not contain DIF elements"
+            print("\tRecords did not contain DIF elements")
 
-        print "\tNumber of records written to files", counter
+        print("\tNumber of records written to files", counter)
         self.numRecHarv += counter
         return
 
@@ -407,7 +407,7 @@ class MetadataHarvester(object):
            try:
                os.makedirs(self.outputDir)
            except:
-               print "Could not create output directory"
+               print("Could not create output directory")
                sys.exit(2)
 
         myid = myid.replace('/','-')
@@ -420,7 +420,7 @@ class MetadataHarvester(object):
                     xml_declaration=True, standalone=None, 
                     encoding="UTF-8")
         except:
-            print "Could not create output file", filename
+            print("Could not create output file", filename)
             raise
             sys.exit(2)
         return
@@ -473,7 +473,7 @@ class MetadataHarvester(object):
                 else:
                     return []
         except ul2.HTTPError:
-            print "There was an error with the URL request"
+            print("There was an error with the URL request")
 
 
 def main(argv):
@@ -528,9 +528,9 @@ def main(argv):
     elif srcprotocol == "OpenSearch":
         request = "?q=*"
     else:
-        print "Unrecognised request"
+        print("Unrecognised request")
 
-    print "Request: "+srcprotocol
+    print("Request: "+srcprotocol)
 
     mh = MetadataHarvester(srcurl,request,destination,srcprotocol,srcformat)
     mh.harvest()
