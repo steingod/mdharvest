@@ -31,7 +31,7 @@ Meaning this should consume both DIF 8, 9 and 10.
             <xsl:apply-templates select="dif:Temporal_Coverage" />
             <xsl:apply-templates select="dif:ISO_Topic_Category" />
             <xsl:element name="mmd:keywords">
-                <xsl:attribute name="vocabulary">GCMD</xsl:attribute>
+                <xsl:attribute name="vocabulary">gcmd</xsl:attribute>
                 <xsl:apply-templates select="dif:Parameters" />
             </xsl:element>
             <xsl:element name="mmd:keywords">
@@ -331,12 +331,12 @@ Meaning this should consume both DIF 8, 9 and 10.
                 <xsl:element name="mmd:dataset_id">
                     <xsl:value-of select="dif:Data_Set_ID" />
                 </xsl:element>
+                <!-- removed 2020-03-25
                 <xsl:element name="mmd:contact">
                     <xsl:element name="mmd:role">
                         <xsl:value-of select="dif:Personnel/dif:Role" />
                     </xsl:element>
                     <xsl:element name="mmd:name">
-                        <!-- Since last name is required it used in translation -->
                         <xsl:value-of select="dif:Personnel/dif:Last_Name" />
                     </xsl:element>
                     <xsl:element name="mmd:email">
@@ -349,6 +349,7 @@ Meaning this should consume both DIF 8, 9 and 10.
                         <xsl:value-of select="dif:Personnel/dif:Fax" />
                     </xsl:element>
                 </xsl:element>
+                -->
             </xsl:element>
         </xsl:template>
 
