@@ -101,10 +101,12 @@ def main(argv):
 
     # Each section is a data centre to harvest
     for section in cfg:
-        #if section not in ['PPD']:
+        #if section not in ['EUMETSAT-CSW']:
         #    continue
-        if section not in ['PPD','NERSC-NORMAP','NERSC-INFRANOR','IMR']:
-            continue
+        #if section not in ['PPD','WGMS']:
+        #    continue
+        #if section not in ['PPD','NERSC-NORMAP','NERSC-INFRANOR','IMR']:
+        #    continue
         #if (section != 'CNR-test'):
         #    continue
         #if (section not in ['PANGAEA-YOPP','NIPR-ADS-YOPP']):
@@ -131,11 +133,19 @@ def main(argv):
                     request = "?verb=ListRecords"\
                             "&metadataPrefix="+cfg[section]['mdkw']
         elif cfg[section]['protocol'] == 'OGC-CSW':
-            request ="?SERVICE=CSW&VERSION=2.0.2"\
-                    "&request=GetRecords&constraintLanguage=CQL_TEXT" \
-                    "&typeNames=csw:Record"\
-                    "&resultType=results"\
-                    "&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full"
+            if section == "EUMETSAT-CSW":
+                request ="?SERVICE=CSW&VERSION=2.0.2"\
+                        "&request=GetRecords" \
+                        "&resultType=results"\
+                        "&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full"
+            else:
+                request ="?SERVICE=CSW&VERSION=2.0.2"\
+                        "&request=GetRecords" \
+                        "&constraintLanguage=CQL_TEXT" \
+                        "&typeNames=csw:Record"\
+                        "&resultType=results"\
+                        "&outputSchema=http://www.isotc211.org/2005/gmd" \
+                        "&elementSetName=full"
         else:
             print("Protocol not supported yet")
             logging.warn("Protocol not supported yet")
