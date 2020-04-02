@@ -72,9 +72,16 @@ class LocalCheckMMD():
 
     def check_project(self,elements,root):
         projmatch = False
-        for proj in self.project:
-            if any(proj in mystring.text for mystring in elements):
-                projmatch = True
+
+        if isinstance(self.project,list):
+            for proj in self.project:
+                print proj
+                if any(proj in mystring.text for mystring in elements):
+                    projmatch = True
+        else:
+            for el in elements:
+                if self.project in el.text:
+                    projmatch = True
 
         if projmatch:
             return True
