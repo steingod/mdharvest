@@ -111,6 +111,8 @@ def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
                         mmdid=ET.XSLT.strparam(str(myuuid)))
             else:
                 newxml = mytransform(inxml)
+            #print newxml
+            #sys.exit()
             output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
             output.write(ET.tostring(newxml, pretty_print=True))
             output.close()
@@ -120,7 +122,7 @@ def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
 def main(argv):
     # This is the main method
     mydif = ['dif', 'gcmd']
-    myiso = ['iso','iso19139']
+    myiso = ['iso','iso19139','iso19115']
 
     # Parse command line arguments
     try:
@@ -198,16 +200,24 @@ def main(argv):
     for section in sorted(cfg.keys()):
         #if section in ['BAS', 'CCIN', 'WGMS', 'NILU']:
         #    continue
-        #if section != 'NIPR-ADS':
+        #if section not in ['PPD','WGMS']:
         #    continue
-        if section not in [ 'NILU','CCIN']:
-            continue
+        #if section not in [ 'NILU','CCIN','WGMS']:
+        #if section not in [ 'NILU','NIPR-ADS-YOPP','PANGAEA-YOPP']:
+        #if section not in [ 'NERSC-NORMAP','NERSC-INFRANOR']:
+        #    continue
+        #if section not in [ 'PPD', 'NPI','IMR','NERSC-NORMAP','NERSC-INFRANOR']:
+        #    continue
         indir = cfg[section]['raw']
         outdir = cfg[section]['mmd']
         if cfg[section]['mdkw'] in mydif:
             stylesheet =  '../etc/dif-to-mmd.xsl'
         elif cfg[section]['mdkw'] in myiso:
             stylesheet =  '../etc/iso-to-mmd.xsl'
+        else:
+            stylesheet = None
+            print('Check configuration, no stylesheet specified...')
+            sys.exit(1)
         if cfg[section]['collection']:
             mycollections = cfg[section]['collection'].replace(' ','')
         else:
