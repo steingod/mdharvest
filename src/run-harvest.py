@@ -101,16 +101,6 @@ def main(argv):
 
     # Each section is a data centre to harvest
     for section in cfg:
-        #if section not in ['EUMETSAT-CSW']:
-        #    continue
-        #if section not in ['PPD','WGMS']:
-        #    continue
-        #if section not in ['PPD','NERSC-NORMAP','NERSC-INFRANOR','IMR']:
-        #    continue
-        #if (section != 'CNR-test'):
-        #    continue
-        #if (section not in ['PANGAEA-YOPP','NIPR-ADS-YOPP']):
-        #    continue
         print('Checking: ', section)
         logging.info('Checking: '+section)
         if cfg[section]['protocol'] == 'OAI-PMH':
