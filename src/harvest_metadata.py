@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 """ Script for harvesting metadata
     Inspired by:
@@ -28,8 +28,10 @@ COMMENTS (for further development):
     - self-numRecHarv is incorrect when harvest fails
 """
 
-import urllib2 as ul2
-import urllib as ul
+#import urllib2 as ul2
+import urllib.request as ul
+from urllib.parse import urlencode, quote_plus
+#import requests
 from xml.dom.minidom import parseString # To be removed
 import codecs
 import sys
@@ -80,12 +82,12 @@ class MetadataHarvester(object):
             start_time = datetime.now()
 
             # Initial phase
-            dom = self.harvestContent(getRecordsURL)
-            if dom != None:
+            myxml = self.harvestContent(getRecordsURL)
+            if myxml != None:
                 if "dif" in self.srcfmt:
-                    self.oaipmh_writeDIFtoFile(dom)
+                    self.oaipmh_writeDIFtoFile(myxml)
                 elif "iso" in self.srcfmt:
-                    self.oaipmh_writeISOtoFile(dom)
+                    self.oaipmh_writeISOtoFile(myxml)
                 else:
                     raise "Metadata format not supported yet."
             else:
@@ -93,36 +95,41 @@ class MetadataHarvester(object):
                 raise IOError("Server to harvest is not responding properly")
                 return(0)
             pageCounter = 1
-            # Check for resumptionToken
-            resumptionToken = dom.find(
-                    'oai:ListRecords/oai:resumptionToken',
-                    namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
-            if resumptionToken != None:
+            resumptionToken = myxml.find('.//{*}resumptionToken')
+            if resumptionToken == None:
+                print("Nothing more to do")
+            else:
                 resumptionToken = resumptionToken.text
+
+            print("====")
+            print("Resumption token found: ",resumptionToken)
+            print("====")
 
             # Manage resumptionToken, i.e. segmentation of results in
             # pages
             while resumptionToken != None:
                 print("\n\tHandling resumptionToken: %.0f" % pageCounter)
-                resumptionToken = ul.urlencode({'resumptionToken':resumptionToken}) # create resumptionToken URL parameter
+                # create resumptionToken URL parameter
+                resumptionToken = urlencode({'resumptionToken':resumptionToken})
                 getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
-                dom = self.harvestContent(getRecordsURLLoop)
-                if dom != None:
+                print("\tURL request:",getRecordsURLLoop)
+                print("["+getRecordsURLLoop+"]")
+                myxml = self.harvestContent(getRecordsURLLoop)
+                if myxml != None:
                     if "dif" in self.srcfmt:
-                        self.oaipmh_writeDIFtoFile(dom)
+                        self.oaipmh_writeDIFtoFile(myxml)
                     elif "iso" in self.srcfmt:
-                        self.oaipmh_writeISOtoFile(dom)
+                        self.oaipmh_writeISOtoFile(myxml)
                     else:
                         raise "Metadata format not supported yet."
                 else:
-                    print("dom = " + str(dom) + ', for page ' + str(pageCounter))
+                    print("myxml = " + str(myxml) + ', for page ' + str(pageCounter))
 
-                resumptionToken = dom.find(
-                        'oai:ListRecords/oai:resumptionToken',
-                        namespaces={'oai':
-                            'http://www.openarchives.org/OAI/2.0/'})
+                resumptionToken = myxml.find('.//{*}resumptionToken')
+                print(">>>>>>",resumptionToken)
                 if resumptionToken != None:
                     resumptionToken = resumptionToken.text
+
                 pageCounter += 1
 
             print("Harvesting completed")
@@ -312,7 +319,7 @@ class MetadataHarvester(object):
                 if isoid == None:
                     isoid = record.find('oai:metadata/gmd:MD_Metadata/gmd:fileIdentifier/gco:CharacterString',
                             namespaces=myns)
-                    print('Here I am',isoid)
+                    #print('Here I am',isoid)
                 if isoid == None:
                     print("Skipping record, no ISO ID")
                     continue
@@ -330,7 +337,7 @@ class MetadataHarvester(object):
                 counter += 1
             print("\tNumber of records written to files", counter)
         else:
-            print("\trecords did not contain ISO elements")
+            print("\tRecords did not contain ISO elements")
 
         self.numRecHarv += counter
 
@@ -429,38 +436,45 @@ class MetadataHarvester(object):
         """ Function for harvesting content from URL."""
         try:
             if not credentials:
-                myfile = ul2.urlopen(URL,timeout=60) # Timeout depends on user
-                #data = myfile.read()
-                myencoding = myfile.headers.getparam('charset')
+                # Timeout depends on user
+                with ul.urlopen(URL,timeout=60) as response:
+                    myencoding = response.getheader('Content-Type').split('=',1)[1]
+                    myfile = response.read()
+                #myfile = requests.get(URL,timeout=60,stream=True) # Timeout depends on user
+                #print(myfile.apparent_encoding)
+                #print(myfile.headers)
+                #print(myfile.text)
+                #myparser = ET.XMLParser(ns_clean=True,
+                #        encoding=myfile.apparent_encoding)
+                #myencoding = myfile.headers.getparam('charset')
                 myparser = ET.XMLParser(ns_clean=True, encoding=myencoding)
-                #data =  myfile.read().decode(myfile.headers.getparam('charset'))
-                #f = open('myharvest.xml','w+')
-                #f.write(data.encode('utf-8'))
-                #f.close()
-                #sys.exit()
                 try:
-                    data = ET.parse(myfile, myparser)
+                    #data = ET.parse(myfile,myparser)
+                    data = ET.fromstring(myfile)
                 except Exception as e:
                     print('Parsing the harvested information failed due to', e)
-                myfile.close()
                 return data
             else:
                 # Not working with lxml
-                p = ul2.HTTPPasswordMgrWithDefaultRealm()
-                p.add_password(None, URL, uname, pw)
-                handler = ul2.HTTPBasicAuthHandler(p)
-                opener = ul2.build_opener(handler)
-                ul2.install_opener(opener)
-                return parseString(ul2.urlopen(URL).read())
-        except ul2.HTTPError:
+                print("Not implemented yet...")
+                return
+#                p = ul.HTTPPasswordMgrWithDefaultRealm()
+#                p.add_password(None, URL, uname, pw)
+#                handler = ul.HTTPBasicAuthHandler(p)
+#                opener = ul.build_opener(handler)
+#                ul.install_opener(opener)
+#                return parseString(ul.urlopen(URL).read())
+        except Exception as e:
             print("There was an error with the URL request. " +
                   "Could not open or parse content from: \n\t %s" % URL)
+            print("\t", e)
 
     def oaipmh_resumptionToken(self,URL):
+        # Not used currently, to be removed?
         """ Function for handling resumptionToken in OAI-PMH"""
         #print "Now in resumptionToken..."
         try:
-            file = ul2.urlopen(URL, timeout=60)
+            file = ul.request.urlopen(URL, timeout=60)
             data = file.read()
             file.close()
             dom = parseString(data)
@@ -472,8 +486,9 @@ class MetadataHarvester(object):
                     return dom.getElementsByTagName('resumptionToken')[0].firstChild.nodeValue
                 else:
                     return []
-        except ul2.HTTPError:
+        except ul.error.URLError as e:
             print("There was an error with the URL request")
+            print("\t",e)
 
 
 def main(argv):

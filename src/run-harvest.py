@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 """
 PURPOSE:
@@ -101,6 +101,9 @@ def main(argv):
 
     # Each section is a data centre to harvest
     for section in cfg:
+        #if section not in ['NIPR-ADS']:
+        #    continue
+        print('\n=======\n')
         print('Checking: ', section)
         logging.info('Checking: '+section)
         if cfg[section]['protocol'] == 'OAI-PMH':
