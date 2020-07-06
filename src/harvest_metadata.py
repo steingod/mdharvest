@@ -110,10 +110,11 @@ class MetadataHarvester(object):
             while resumptionToken != None:
                 print("\n\tHandling resumptionToken: %.0f" % pageCounter)
                 # create resumptionToken URL parameter
-                resumptionToken = urlencode({'resumptionToken':resumptionToken})
+                #resumptionToken = urlencode({'resumptionToken':resumptionToken})
+                resumptionToken = 'resumptionToken='+resumptionToken
                 getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
                 print("\tURL request:",getRecordsURLLoop)
-                print("["+getRecordsURLLoop+"]")
+                #print(type(getRecordsURLLoop))
                 myxml = self.harvestContent(getRecordsURLLoop)
                 if myxml != None:
                     if "dif" in self.srcfmt:
@@ -126,9 +127,11 @@ class MetadataHarvester(object):
                     print("myxml = " + str(myxml) + ', for page ' + str(pageCounter))
 
                 resumptionToken = myxml.find('.//{*}resumptionToken')
-                print(">>>>>>",resumptionToken)
+                #print(">>>>>>",resumptionToken)
                 if resumptionToken != None:
                     resumptionToken = resumptionToken.text
+                else:
+                    print(ET.tostring(myxml))
 
                 pageCounter += 1
 
@@ -434,23 +437,18 @@ class MetadataHarvester(object):
 
     def harvestContent(self,URL,credentials=False,uname="foo",pw="bar"):
         """ Function for harvesting content from URL."""
+        #print(">>>>>>>>>>>>",URL)
         try:
             if not credentials:
-                # Timeout depends on user
+                # Timeout depends on user, 60 seconds is too little for
+                # NSIDC
                 with ul.urlopen(URL,timeout=60) as response:
                     myencoding = response.getheader('Content-Type').split('=',1)[1]
-                    myfile = response.read()
-                #myfile = requests.get(URL,timeout=60,stream=True) # Timeout depends on user
-                #print(myfile.apparent_encoding)
-                #print(myfile.headers)
-                #print(myfile.text)
-                #myparser = ET.XMLParser(ns_clean=True,
-                #        encoding=myfile.apparent_encoding)
-                #myencoding = myfile.headers.getparam('charset')
-                myparser = ET.XMLParser(ns_clean=True, encoding=myencoding)
+                    myfile = bytes(response.read())
+                myparser = ET.XMLParser(ns_clean=True,
+                        encoding=myencoding)
                 try:
-                    #data = ET.parse(myfile,myparser)
-                    data = ET.fromstring(myfile)
+                    data = ET.fromstring(myfile,myparser)
                 except Exception as e:
                     print('Parsing the harvested information failed due to', e)
                 return data
