@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 """
 PURPOSE:
@@ -46,17 +46,17 @@ import datetime
 from dateutil.parser import parse
 
 def usage():
-    print sys.argv[0]+" [options] input"
-    print "\t-h|--help: dump this information"
-    print "\t-c|--configuration: specify where to find the configuration file"
-    print "\t-l|--collection: specify collection to tag the dataset with"
-    print "\t-p|--parameters: specify parameters to filter on (comma separated)"
-    print "\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list"
-    print "\t-a|--aen: checks project affiliation and adds Nansen Legacy collection"
-    print "\t-g|--gcw: checks cryosphere parameters (and adds GCW collection)"
-    print "\t-s|--sios: checks bounding box (and adds SIOS collection)"
-    print "\t-i|--infranor: checks project affiliation and adds InfraNOR collection"
-    print "\t-n|--nmap: checks project affiliation (and adds NMAP collection)"
+    print(sys.argv[0]+" [options] input")
+    print("\t-h|--help: dump this information")
+    print("\t-c|--configuration: specify where to find the configuration file")
+    print("\t-l|--collection: specify collection to tag the dataset with")
+    print("\t-p|--parameters: specify parameters to filter on (comma separated)")
+    print("\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list")
+    print("\t-a|--aen: checks project affiliation and adds Nansen Legacy collection")
+    print("\t-g|--gcw: checks cryosphere parameters (and adds GCW collection)")
+    print("\t-s|--sios: checks bounding box (and adds SIOS collection)")
+    print("\t-i|--infranor: checks project affiliation and adds InfraNOR collection")
+    print("\t-n|--nmap: checks project affiliation (and adds NMAP collection)")
     print("Options a, g, i, n, and s cannot be used simultaneously")
     sys.exit(2)
 
@@ -75,7 +75,7 @@ class LocalCheckMMD():
 
         if isinstance(self.project,list):
             for proj in self.project:
-                print proj
+                print(proj)
                 if any(proj in mystring.text for mystring in elements):
                     projmatch = True
         else:
@@ -111,9 +111,9 @@ class LocalCheckMMD():
             return False
 
     def check_bounding_box(self,elements,root):
-        print("####",elements)
+        #print("####",elements)
         if len(elements) > 1:
-            print "Found more than one element, not handling this now..."
+            print("Found more than one element, not handling this now...")
             return False
         #print ET.tostring(elements[0],pretty_print=True)
         # Decode bounding box from XML
@@ -130,18 +130,18 @@ class LocalCheckMMD():
 
         # Check bounding box
         # Lists are ordered N, E, S, W
-        print "This bounding box",thisbb
-        print "Reference bounding box",self.bbox
+        print("This bounding box",thisbb)
+        print("Reference bounding box",self.bbox)
         if len(thisbb)==0:
             return(False)
         latmatch = False
         lonmatch = False
         if (thisbb[0] < self.bbox[0]) and (thisbb[2] > self.bbox[2]):
             latmatch = True
-            print "Latitude match"
+            print("Latitude match")
         if (thisbb[1] < self.bbox[1]) and (thisbb[3] > self.bbox[3]):
             lonmatch = True
-            print "Longitude match"
+            print("Longitude match")
 
         if (latmatch and lonmatch):
             return True
@@ -172,22 +172,28 @@ class LocalCheckMMD():
             elements = tree.findall("mmd:geographic_extent",
                     namespaces=mynsmap)
             if len(elements) != 1:
-                print "Error in bounding box (too few or too many)..."
+                print("Error in bounding box (too few or too many)...")
                 setInactive = True
             bboxfields = ['mmd:north','mmd:east','mmd:south','mmd:west']
-            for myel in elements:
-                for myfield in bboxfields:
-                    myvalue = myel.find('mmd:rectangle/'+myfield,
-                            namespaces=root.nsmap).text
-                    if myvalue == None or myvalue.isspace():
-                        setInactive = True
+            if tree.find('mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap):
+                for myel in elements:
+                    for myfield in bboxfields:
+                        if myel.find('mmd:rectangle/'+myfield,
+                                namespaces=root.nsmap):
+                            myvalue = myel.find('mmd:rectangle/'+myfield,
+                                    namespaces=root.nsmap).text
+                            if myvalue == None or myvalue.isspace():
+                                setInactive = True
+            else:
+                print("No bounding box found in data.")
+                setInactive = True
             # Check for multiple temporal periods
             # This should be removed as this is supported by the MMD
             # specification, but not supproted by the SolR ingestion.
             elements = tree.findall("mmd:temporal_extent",
                     namespaces=mynsmap)
             if len(elements) != 1:
-                print "Too few or too many temporal extent elements..."
+                print("Too few or too many temporal extent elements...")
                 setInactive = True
             # Check DateTime strings (to be removed later)
             if not setInactive:
@@ -243,7 +249,7 @@ class LocalCheckMMD():
                 myel = '//mmd:collection[text()="'+item+'"]'
                 myelement = tree.xpath(myel, namespaces=mynsmap)
                 if myelement:
-                    print "Already belongs to",item
+                    print("Already belongs to",item)
                     #tmpcoll.remove(item)
                 else:
                     # Add new collections
@@ -337,7 +343,7 @@ def main(argv):
         collection = None
 
     # Read config file
-    print "Reading", cfgfile
+    print("Reading", cfgfile)
     with open(cfgfile, 'r') as ymlfile:
         cfg = yaml.load(ymlfile)
 
@@ -349,13 +355,17 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
-        if section not in ["NPI","IMR","NERSC-NORMAP","NERSC-INFRANOR"]:
+        print("Filtering records from:", section)
+        if section in ["CCIN","PPD","EUMETSAT-OAI","ECCC"]:
+            print("Skipping section")
+            continue
+        if section not in ['NILU']:
             continue
         # Find files to process
         try:
             myfiles = os.listdir(cfg[section]['mmd'])
         except os.error:
-            print os.error
+            print(os.error)
             sys.exit(1)
 
         # Process files, dump valid filenames to file
@@ -364,14 +374,14 @@ def main(argv):
         s = "/"
         for myfile in myfiles:
             if myfile.endswith(".xml"):
-                print i, myfile
+                print(i, myfile)
                 i += 1
                 file2check = LocalCheckMMD(section,s.join((cfg[section]['mmd'],myfile)),
                         bounding, parameters, collection, project)
                 if file2check.check_mmd():
-                    print "Success"
+                    print("Success")
                 else:
-                    print "Failure"
+                    print("Failure")
         f.close()
 
 
