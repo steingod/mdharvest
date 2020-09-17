@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 """
 PURPOSE:
@@ -40,15 +40,15 @@ import codecs
 import yaml
 
 def usage():
-    print sys.argv[0]+" [options] input"
-    print "\t-h|--help: dump this information"
-    print "\t-c|--cfg: specify configuration file (same as mdharvest)"
-    print "\t-i|--indir: specify where to get input"
-    print "\t-o|--outdir: specify where to put results"
-    print "\t-s|--style: specify the stylesheet to use"
-    print "\t-x|--xmd: input is MM2 with XMD files"
-    print "\t-p|--parent: UUID of parent dataset"
-    print "\t-f|--file: treat input as file, not directory"
+    print(sys.argv[0]+" [options] input")
+    print("\t-h|--help: dump this information")
+    print("\t-c|--cfg: specify configuration file (same as mdharvest)")
+    print("\t-i|--indir: specify where to get input")
+    print("\t-o|--outdir: specify where to put results")
+    print("\t-s|--style: specify the stylesheet to use")
+    print("\t-x|--xmd: input is MM2 with XMD files")
+    print("\t-p|--parent: UUID of parent dataset")
+    print("\t-f|--file: treat input as file, not directory")
     sys.exit(2)
 
 def create_uuid(infile,lastupdate):
@@ -64,7 +64,7 @@ def check_directories(cfg):
                try:
                    os.makedirs(cfg[section][name])
                except:
-                   print "Could not create output directory"
+                   print("Could not create output directory")
                    return(2)
     return(0)
 
@@ -83,13 +83,13 @@ def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
     s = "/"
     for myfile in myfiles:
         xmlfile = s.join((indir,myfile))
-        print "Processing",xmlfile, i
+        print("Processing",xmlfile, i)
         if myfile.endswith(".xml"):
             if myflags['xflg']:
                 # while testing
                 # xmdfile = s.join((indir,myfile.replace(".xml",".xmd")))
                 if not os.path.isfile(xmdfile):
-                    print xmdfile, "not found"
+                    print(xmdfile, "not found")
                     continue
                 xmd = ET.parse(xmdfile)
                 xmdlastupdate = xmd.xpath("//ds:info/@datestamp", \
@@ -111,10 +111,11 @@ def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
                         mmdid=ET.XSLT.strparam(str(myuuid)))
             else:
                 newxml = mytransform(inxml)
-            #print newxml
+            #print(type(newxml))
             #sys.exit()
             output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
-            output.write(ET.tostring(newxml, pretty_print=True))
+            output.write(ET.tostring(newxml,
+                pretty_print=True).decode('utf-8'))
             output.close()
 
     #return(0)
@@ -156,7 +157,7 @@ def main(argv):
             xmlfile = arg
             fflg = True
 
-    if not cflg and not fflg:
+    if (not cflg) and (not fflg):
         usage()
     #elif not iflg:
     #    usage()
@@ -168,14 +169,14 @@ def main(argv):
 
     # Read config file
     if not fflg:
-        print "Reading", cfgfile
+        print("Reading", cfgfile)
         with open(cfgfile, 'r') as ymlfile:
             cfg = yaml.load(ymlfile)
 
     # Check that all relevant directories exists...
     if not fflg:
         if check_directories(cfg):
-            print "Something went wrong creating directories"
+            print("Something went wrong creating directories")
             sys.exit(2)
 
     if fflg:
@@ -183,8 +184,8 @@ def main(argv):
         parser = ET.XMLParser(remove_blank_text=True)
         try:
             myxslt = ET.parse(stylesheet, parser)
-        except ET.XMLSyntaxError,e:
-            print e
+        except ET.XMLSyntaxError as e:
+            print(e)
             sys.exit(1)
         mytransform = ET.XSLT(myxslt)
         # Input file
@@ -200,8 +201,8 @@ def main(argv):
     for section in sorted(cfg.keys()):
         #if section in ['BAS', 'CCIN', 'WGMS', 'NILU']:
         #    continue
-        #if section not in ['PPD','WGMS']:
-        #    continue
+        if section not in ['NILU']:
+            continue
         #if section not in [ 'NILU','CCIN','WGMS']:
         #if section not in [ 'NILU','NIPR-ADS-YOPP','PANGAEA-YOPP']:
         #if section not in [ 'NERSC-NORMAP','NERSC-INFRANOR']:
@@ -228,8 +229,8 @@ def main(argv):
         parser = ET.XMLParser(remove_blank_text=True)
         try:
             myxslt = ET.parse(stylesheet, parser)
-        except ET.XMLSyntaxError,e:
-            print e
+        except ET.XMLSyntaxError as e:
+            print(e)
             sys.exit(1)
         myroot = myxslt.getroot()
         # Find the location where to insert element
@@ -244,7 +245,7 @@ def main(argv):
             #    print "Can't find the requested element, bailing out"
             #    sys.exit(2)
             if len(myelement) == 0:
-                print "Can't find the requested element, bailing out"
+                print("Can't find the requested element, bailing out")
                 sys.exit(2)
 
             myparent = myelement[0].getparent()
@@ -261,12 +262,12 @@ def main(argv):
         try:
             myfiles = os.listdir(indir)
         except OSError as e:
-            print e
+            print(e)
             sys.exit(1)
 
         # Process files
         if process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
-            print "Something went wrong processing files"
+            print("Something went wrong processing files")
             sys.exit(2)
 
 
