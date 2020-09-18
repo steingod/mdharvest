@@ -199,6 +199,8 @@ def main(argv):
 
     # Each section is a data centre to harvest
     for section in sorted(cfg.keys()):
+        print("=========================")
+        print("Now processing:",section)
         #if section in ['BAS', 'CCIN', 'WGMS', 'NILU']:
         #    continue
         #if section not in [ 'NILU','CCIN','WGMS']:
@@ -216,7 +218,8 @@ def main(argv):
         else:
             stylesheet = None
             print('Check configuration, no stylesheet specified...')
-            sys.exit(1)
+            print('Skipping these records')
+            continue
         if cfg[section]['collection']:
             mycollections = cfg[section]['collection'].replace(' ','')
         else:
