@@ -101,7 +101,7 @@ def main(argv):
 
     # Each section is a data centre to harvest
     for section in cfg:
-        #if section not in ['NIPR-ADS']:
+        #if section not in ['NERSC-INFRANOR','NILU']:
         #    continue
         print('\n=======\n')
         print('Checking: ', section)
@@ -131,6 +131,14 @@ def main(argv):
                         "&request=GetRecords" \
                         "&resultType=results"\
                         "&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full"
+            elif section == "WGMS":
+                request ="?SERVICE=CSW&VERSION=2.0.2"\
+                        "&request=GetRecords" \
+                        "&constraintLanguage=CQL_TEXT" \
+                        "&typeNames=gmd:MD_Metadata"\
+                        "&resultType=results"\
+                        "&outputSchema=http://www.isotc211.org/2005/gmd" \
+                        "&elementSetName=full"
             else:
                 request ="?SERVICE=CSW&VERSION=2.0.2"\
                         "&request=GetRecords" \

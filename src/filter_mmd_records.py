@@ -356,11 +356,11 @@ def main(argv):
     # Each section is a data centre to handle
     for section in cfg:
         print("Filtering records from:", section)
-        if section in ["CCIN","PPD","EUMETSAT-OAI","ECCC"]:
-            print("Skipping section")
-            continue
-        if section not in ['NILU']:
-            continue
+        #if section in ["CCIN","PPD","EUMETSAT-OAI","ECCC"]:
+        #    print("Skipping section")
+        #    continue
+        #if section not in ['NILU']:
+        #    continue
         # Find files to process
         try:
             myfiles = os.listdir(cfg[section]['mmd'])

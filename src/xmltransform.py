@@ -201,8 +201,6 @@ def main(argv):
     for section in sorted(cfg.keys()):
         #if section in ['BAS', 'CCIN', 'WGMS', 'NILU']:
         #    continue
-        if section not in ['NILU']:
-            continue
         #if section not in [ 'NILU','CCIN','WGMS']:
         #if section not in [ 'NILU','NIPR-ADS-YOPP','PANGAEA-YOPP']:
         #if section not in [ 'NERSC-NORMAP','NERSC-INFRANOR']:
