@@ -199,6 +199,9 @@ class LocalCheckMMD():
             if not setInactive:
                 for item in elements[0].iterdescendants():
                     #print type(item), item.tag, item.text
+                    if item.text == None:
+                        setInactive = True
+                        continue
                     if re.match('\d{4}-\d{2}-\d{2}Z', item.text):
                         #item.text = parse(item.text).date().strftime("%Y-%m-%d")
                         item.text = item.text[:-1]
@@ -359,8 +362,8 @@ def main(argv):
         #if section in ["CCIN","PPD","EUMETSAT-OAI","ECCC"]:
         #    print("Skipping section")
         #    continue
-        #if section not in ['NILU']:
-        #    continue
+        if section not in ['NSIDC']:
+            continue
         # Find files to process
         try:
             myfiles = os.listdir(cfg[section]['mmd'])
