@@ -175,7 +175,8 @@ class LocalCheckMMD():
                 print("Error in bounding box (too few or too many)...")
                 setInactive = True
             bboxfields = ['mmd:north','mmd:east','mmd:south','mmd:west']
-            if tree.find('mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap):
+            if
+            tree.find('mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap) is not None:
                 for myel in elements:
                     for myfield in bboxfields:
                         if myel.find('mmd:rectangle/'+myfield,
