@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 """ Script for harvesting metadata
     Inspired by:
@@ -39,16 +38,46 @@ import os
 import getopt
 from datetime import datetime
 import lxml.etree as ET
+import logging
 
-def usage():
-    print(sys.argv[0]+" [options] input")
-    print("\t-h|--help: dump this information")
-    print("\t-p|--protocol: specify the protocol to use")
-    print("\t-s|--set: specify set to harvest (only used for OAI-PMH)")
-    print("\t-f|--format: specify the file format to use (only used for OAI-PMH)")
-    print("\t-u|--url: specify the URL to use for the service provider")
-    print("\t-d|--destination: specify the local destination")
-    sys.exit(2)
+module_logger = logging.getLogger('mdharvest')
+
+def parse_cfg(cfgfile):
+    # Read config file
+    module.logger.info("Reading configuration from %s", cfgfile)
+    with open(cfgfile, 'r') as ymlfile:
+        cfgstr = yaml.full_load(ymlfile)
+
+    return cfgstr
+
+def initialise_logger(outputfile = './log'):
+    # Check that logfile exists
+    logdir = os.path.dirname(outputfile)
+    if not os.path.exists(logdir):
+        try:
+            os.makedirs(logdir)
+        except:
+            raise IOError
+    # Set up logging
+    mylog = logging.getLogger('mdharvest')
+    mylog.setLevel(logging.INFO)
+    #logging.basicConfig(level=logging.INFO, 
+    #        format='%(asctime)s - %(levelname)s - %(message)s')
+    myformat = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(myformat)
+    mylog.addHandler(console_handler)
+    file_handler = logging.handlers.TimedRotatingFileHandler(
+            outputfile,
+            when='w0',
+            interval=1,
+            backupCount=7)
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(myformat)
+    mylog.addHandler(file_handler)
+
+    return(mylog)
 
 class MetadataHarvester(object):
     """ 
@@ -65,6 +94,8 @@ class MetadataHarvester(object):
         self.username = username
         self.pw = pw
         self.numRecHarv = 0
+        self.logger = logging.getLogger('MetadataHarvester')
+        self.logger.info('Creating an instance of MetadataHarvester')
 
     def harvest(self):
         """ 
@@ -78,10 +109,11 @@ class MetadataHarvester(object):
             # Could/should be more sophistiated by means of deciding url
             # properties
             getRecordsURL = str(baseURL + records)
-            print("Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n" % (getRecordsURL,hProtocol))
+            self.logger.info("Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n", getRecordsURL,hProtocol)
             start_time = datetime.now()
 
             # Initial phase
+            print("\tURL request:",getRecordsURL)
             myxml = self.harvestContent(getRecordsURL)
             if myxml != None:
                 if "dif" in self.srcfmt:
@@ -130,8 +162,8 @@ class MetadataHarvester(object):
                 #print(">>>>>>",resumptionToken)
                 if resumptionToken != None:
                     resumptionToken = resumptionToken.text
-                else:
-                    print(ET.tostring(myxml))
+                #else:
+                #    print(ET.tostring(myxml))
 
                 pageCounter += 1
 
@@ -442,16 +474,29 @@ class MetadataHarvester(object):
             if not credentials:
                 # Timeout depends on user, 60 seconds is too little for
                 # NSIDC
-                with ul.urlopen(URL,timeout=60) as response:
-                    myencoding = response.getheader('Content-Type').split('=',1)[1]
-                    myfile = bytes(response.read())
-                myparser = ET.XMLParser(ns_clean=True,
-                        encoding=myencoding)
+                myreq = ul.Request(URL)
                 try:
-                    data = ET.fromstring(myfile,myparser)
+                    with ul.urlopen(myreq,timeout=60) as response:
+                        #print('>>>>', response.getheader('Content-Type'))
+                        if 'charset' in response.getheader('Content-Type'):
+                            myencoding = response.getheader('Content-Type').split('=',1)[1] 
+                        else:
+                            myencoding = 'UTF-8'
+                        #myfile = bytes(response.read())
+                        myfile = response.read()
+                    myparser = ET.XMLParser(ns_clean=True,
+                            encoding=myencoding)
+                    try:
+                        #f = open('myfile.xml','w')
+                        #print(myfile, file=f)
+                        #f.close()
+                        data = ET.fromstring(myfile,myparser)
+                        #print('>>>>>', data)
+                    except Exception as e:
+                        print('Parsing the harvested information failed due to', e)
+                    return data
                 except Exception as e:
-                    print('Parsing the harvested information failed due to', e)
-                return data
+                    print('Couldn\'t retrieve data: ', e)
             else:
                 # Not working with lxml
                 print("Not implemented yet...")
@@ -488,87 +533,4 @@ class MetadataHarvester(object):
             print("There was an error with the URL request")
             print("\t",e)
 
-
-def main(argv):
-    ''' Main method with examples for isolated running of script'''
-
-    # Parse command line arguments
-    try:
-        opts, args = getopt.getopt(argv,"hp:f:s:u:d:",
-                ["help","protocol","format","set","url","destination"])
-    except getopt.GetoptError:
-        usage()
-
-    pflg = uflg = dflg = fflg = sflg = False
-    for opt, arg in opts:
-        if opt == ("-h","--help"):
-            usage()
-        elif opt in ("-p","--protocol"):
-            srcprotocol = arg
-            pflg =True
-        elif opt in ("-s","--set"):
-            oaiset = arg
-            sflg =True
-        elif opt in ("-f","--format"):
-            srcformat = arg
-            fflg =True
-        elif opt in ("-u","--url"):
-            srcurl = arg
-            uflg =True
-        elif opt in ("-d","--destination"):
-            destination = arg
-            dflg =True
-
-    if not pflg:
-        usage()
-    elif not uflg:
-        usage()
-    elif not dflg:
-        usage()
-
-    if srcprotocol == "OAI-PMH":
-        if not fflg:
-            usage()
-        if sflg:
-            request = "?verb=ListRecords&metadataPrefix="+srcformat+"&set="+oaiset
-        else:
-            request = "?verb=ListRecords&metadataPrefix="+srcformat
-    elif srcprotocol == "OGC-CSW":
-        if not "?SERVICE" in srcurl:
-            request = "?SERVICE=CSW&VERSION=2.0.2&request=GetRecords&constraintLanguage=CQL_TEXT&typeNames=csw:Record&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full"
-        else:
-            request = ""
-    elif srcprotocol == "OpenSearch":
-        request = "?q=*"
-    else:
-        print("Unrecognised request")
-
-    print("Request: "+srcprotocol)
-
-    mh = MetadataHarvester(srcurl,request,destination,srcprotocol,srcformat)
-    mh.harvest()
-
-    sys.exit()
-
-
-    with open('myValues.txt','r') as code:
-        cred_tmp = code.readline()
-
-    cred = cred_tmp.split(';')
-    baseURL = 'https://colhub.met.no/search'
-    records = '?q=*'
-    #records = '?q=platformname:Sentinel-1%20AND%20ingestionDate:[NOW-2DAY%20TO%20NOW]'
-    #records = '?q=S2A_MSIL1C_20170116T105401_N0204_R051_T32VNM_20170116T105355'
-    #records = '?q=S1A_IW_GRDM_1SDV_20161206T060347_20161206T060447_014255_0170E4_A49B'
-    #records = '?q=S2A_MSIL1C*%20AND%20footprint:%22Intersects(POLYGON((-10.25%2071.41,%20-10.20%2070.61,%20-6.79%2070.60,%20-6.70%2071.44,%20-10.25%2071.41)))%22%20AND%20ingestiondate:[NOW-3HOUR%20TO%20NOW]'
-    #records = '?q=S2A_OPER_PRD_MSIL1C_PDMC_20160211T195349_R051_V20160211T105155_20160211T105155'
-    #records = '?q=S2B_MSIL1C_20170820T115639_N0205_R066_T35XMG_20170820T115639'
-    #records = '?q=S2B_MSIL1C*%20AND%20(%20footprint:"Intersects(POLYGON((3.04675852309276%2071.68036004870032,41.54285227309276%2071.68036004870032,41.54285227309276%2081.47413661551582,3.04675852309276%2081.47413661551582,3.04675852309276%2071.68036004870032)))"%20)%20AND%20ingestiondate:[NOW-60HOUR%20TO%20NOW-5HOUR]'
-
-    outputDir = 'output/'
-    hProtocol = 'OpenSearch'
-    mh3 = MetadataHarvester(baseURL,records, outputDir, hProtocol,cred[0],cred[1])
-    mh3.harvest()
-if __name__ == '__main__':
-    main(sys.argv[1:])
 

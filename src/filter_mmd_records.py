@@ -37,13 +37,16 @@ NOTES:
 
 import sys
 import os
-import getopt
+import argparse
 import lxml.etree as ET
 import codecs
 import re
 import yaml
 import datetime
 from dateutil.parser import parse
+import logging
+from logging.handlers import TimedRotatingFileHandler
+from harvest_metadata import initialise_logger
 
 def usage():
     print(sys.argv[0]+" [options] input")
@@ -59,6 +62,31 @@ def usage():
     print("\t-n|--nmap: checks project affiliation (and adds NMAP collection)")
     print("Options a, g, i, n, and s cannot be used simultaneously")
     sys.exit(2)
+
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("-c","--config",dest="cfgfile", help="Configuration file containing endpoints to harvest", required=True)
+    parser.add_argument("-l","--logfile",dest="logfile", help="Log file", required=True)
+    parser.add_argument("-o","--collection",dest="collection", help="Collection tag to use", required=False)
+    parser.add_argument("-p","--parameters",dest="parameters", help="Comma separated list of parameters to filter on.", required=False)
+    parser.add_argument("-b","--bounding",dest="bounding", help="Comma separated bounding box (N,E,S,W) to filter on.", required=False)
+    parser.add_argument("-a","--aen",help="Checks project affiliation and adds Nansen Legacy collection", action='store_true')
+    parser.add_argument("-g","--gcw",help="Checks parameters (GCMD) for cryosphere and adds GCW collection", action='store_true')
+    parser.add_argument("-s","--sios",help="Checks bounding box and adds SIOS collection.", action='store_true')
+    parser.add_argument("-i","--infranor",help="Checks project affiliation and adds InfraNOR collection.", action='store_true')
+    parser.add_argument("-n","--nmap",help="Checks project affiliation and adds NMAP collection.", action='store_true')
+    parser.add_argument('-r','--sources',dest='sources',help='Comma separated list of sources (in config) to harvest',required=False)
+
+    # Options a, g, i, n and s cannot be used simultaneously
+
+    args = parser.parse_args()
+
+    if args.cfgfile is None:
+        parser.print_help()
+        parser.exit()
+
+    return args
 
 class LocalCheckMMD():
     def __init__(self, section, mmd_file, bounding, parameters, mycollection,
@@ -115,18 +143,34 @@ class LocalCheckMMD():
         if len(elements) > 1:
             print("Found more than one element, not handling this now...")
             return False
-        #print ET.tostring(elements[0],pretty_print=True)
+        #print(ET.tostring(elements[0],pretty_print=True))
         # Decode bounding box from XML
         thisbb = []
         for el in elements:
-            northernmost = float(el.find('mmd:north',namespaces=root.nsmap).text)
-            thisbb.append(northernmost)
-            easternmost = float(el.find('mmd:east',namespaces=root.nsmap).text)
-            thisbb.append(easternmost)
-            southernmost = float(el.find('mmd:south',namespaces=root.nsmap).text)
-            thisbb.append(southernmost)
-            westernmost = float(el.find('mmd:west',namespaces=root.nsmap).text)
-            thisbb.append(westernmost)
+            if el.find('mmd:north',namespaces=root.nsmap).text is None:
+                print('mmd:north is empty')
+                return(False)
+            else:
+                northernmost = float(el.find('mmd:north',namespaces=root.nsmap).text)
+                thisbb.append(northernmost)
+            if el.find('mmd:east',namespaces=root.nsmap).text is None:
+                print('mmd:east is empty')
+                return(False)
+            else:
+                easternmost = float(el.find('mmd:east',namespaces=root.nsmap).text)
+                thisbb.append(easternmost)
+            if el.find('mmd:south',namespaces=root.nsmap).text is None:
+                print('mmd:south is empty')
+                return(False)
+            else:
+                southernmost = float(el.find('mmd:south',namespaces=root.nsmap).text)
+                thisbb.append(southernmost)
+            if el.find('mmd:west',namespaces=root.nsmap).text is None:
+                print('mmd:west is empty')
+                return(False)
+            else:
+                westernmost = float(el.find('mmd:west',namespaces=root.nsmap).text)
+                thisbb.append(westernmost)
 
         # Check bounding box
         # Lists are ordered N, E, S, W
@@ -217,14 +261,11 @@ class LocalCheckMMD():
 
         # Check parameters,bounding box and project
         if self.params and not setInactive:
-            elements = tree.findall("mmd:keywords[@vocabulary='GCMD']/mmd:keyword",
-                    namespaces=mynsmap)
+            elements = tree.findall("mmd:keywords[@vocabulary='GCMD']/mmd:keyword", namespaces=mynsmap)
         if self.bbox and not setInactive:
-            elements = tree.findall('mmd:geographic_extent/mmd:rectangle',
-                    namespaces=mynsmap)
+            elements = tree.findall('mmd:geographic_extent/mmd:rectangle', namespaces=mynsmap)
         if self.project and not setInactive:
-            elements = tree.findall('mmd:project/mmd:short_name',
-                    namespaces=mynsmap)
+            elements = tree.findall('mmd:project/mmd:short_name', namespaces=mynsmap)
             for el in elements:
                 if el.text == None:
                     setInactive = True
@@ -271,89 +312,108 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hc:p:b:l:gsnai",
-                ["help",
-                    "configuration","parameters","bounding",
-                    "collection","gcw","sios","nmap","aen","infranor"])
-    except getopt.GetoptError:
-        usage()
+        args = parse_arguments()
+    except:
+        raise SystemExit('Command line arguments didn\'t parse correctly.')
 
-    cflg = pflg = bflg = lflg = gflg = sflg = nflg = aflg = iflg = False
-    for opt, arg in opts:
-        if opt == ("-h","--help"):
-            usage()
-        elif opt in ("-c","--configuration"):
-            cfgfile = arg
-            cflg = True
-        elif opt in ("-p","--parameters"):
-            parameters = arg
-            pflg = True
-        elif opt in ("-b","--bounding"):
-            bounding = arg
-            bflg = True
-        elif opt in ("-l","--collection"):
-            collection = arg
-            lflg = True
-        elif opt in ("-a","--aen"):
-            aflg = True
-        elif opt in ("-g","--gcw"):
-            gflg = True
-        elif opt in ("-s","--sios"):
-            sflg = True
-        elif opt in ("-i","--infranor"):
-            iflg = True
-        elif opt in ("-n","--nmap"):
-            nflg = True
+    if args.sources:
+        mysources = args.sources.split(',')
 
-    if not cflg:
-        usage()
-    elif not (lflg or gflg or sflg or nflg or iflg or aflg):
-        usage()
-    if (nflg and sflg) or (sflg and gflg) or (nflg and gflg):
-        usage()
+    # Set up logging
+    print(args.logfile)
+    mylog = initialise_logger(args.logfile)
+    mylog.info('\n==========\nConfiguration of logging is finished.')
+
+    # Read config file
+    mylog.info("Reading configuration from: %s", args.cfgfile)
+    with open(args.cfgfile, 'r') as ymlfile:
+        cfg = yaml.full_load(ymlfile)
+
+    # Parse command line arguments
+##    try:
+##        opts, args = getopt.getopt(argv,"hc:p:b:l:gsnai",
+##                ["help",
+##                    "configuration","parameters","bounding",
+##                    "collection","gcw","sios","nmap","aen","infranor"])
+##    except getopt.GetoptError:
+##        usage()
+##
+##    cflg = pflg = bflg = lflg = gflg = sflg = nflg = aflg = iflg = False
+##    for opt, arg in opts:
+##        if opt == ("-h","--help"):
+##            usage()
+##        elif opt in ("-c","--configuration"):
+##            cfgfile = arg
+##            cflg = True
+##        elif opt in ("-p","--parameters"):
+##            parameters = arg
+##            pflg = True
+##        elif opt in ("-b","--bounding"):
+##            bounding = arg
+##            bflg = True
+##        elif opt in ("-l","--collection"):
+##            collection = arg
+##            lflg = True
+##        elif opt in ("-a","--aen"):
+##            aflg = True
+##        elif opt in ("-g","--gcw"):
+##            gflg = True
+##        elif opt in ("-s","--sios"):
+##            sflg = True
+##        elif opt in ("-i","--infranor"):
+##            iflg = True
+##        elif opt in ("-n","--nmap"):
+##            nflg = True
+##
+##    if not cflg:
+##        usage()
+##    elif not (lflg or gflg or sflg or nflg or iflg or aflg):
+##        usage()
+##    if (nflg and sflg) or (sflg and gflg) or (nflg and gflg):
+##        usage()
 
     # Define parameters to find
     # Not working yet...
-    if pflg:
-        parameters = parameters.split(',')
+    if args.parameters:
+        parameters = args.parameters.split(',')
     else:
         parameters = None
 
     # If filtering for GCW, parameters and collection are added automatic
     bounding = project = None
-    if gflg:
+    if args.gcw:
         parameters = ["CRYOSPHERE",
                 "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE",
                 "OCEANS &gt; SEA ICE"]
         collection = "GCW"
-    elif aflg:
+    elif args.aen:
         project = "Nansen Legacy"
         collection = "AeN"
-    elif sflg:
+    elif args.sios:
         bounding = [90.,40.,70.,-20.]
         collection = "SIOS"
-    elif iflg:
+    elif args.infranor:
         project = "INFRANOR"
         collection = "INFRANOR"
-    elif nflg:
+    elif args.nmap:
         project = "NORMAP"
         collection = "NMAP"
 
     # Define collections to add
-    if lflg:
-        collection = collection.split(',')
-    elif ((not sflg) and (not gflg) and (not nflg) and (not aflg) and (not iflg)):
+    if args.collection:
+        collection = args.collection.split(',')
+    elif ((not args.sios) and (not args.gcw) and (not args.nmap) and (not args.aen) and (not args.infranor)):
         collection = None
 
     # Read config file
-    print("Reading", cfgfile)
-    with open(cfgfile, 'r') as ymlfile:
-        cfg = yaml.load(ymlfile)
+    print("Reading", args.cfgfile)
+    with open(args.cfgfile, 'r') as ymlfile:
+        cfg = yaml.full_load(ymlfile)
 
     # Define bounding box
     # Provided as comma separated list (N,E,S,W)
-    if bflg:
-        bbox = bounding.split(",")
+    if args.bounding:
+        bbox = args.bounding.split(",")
         bounding = [float(i) for i in bbox]
 
     # Each section is a data centre to handle
@@ -362,7 +422,7 @@ def main(argv):
         #if section in ["CCIN","PPD","EUMETSAT-OAI","ECCC"]:
         #    print("Skipping section")
         #    continue
-        if section not in ['NSIDC']:
+        if section not in ['NPI','NSIDC']:
             continue
         # Find files to process
         try:

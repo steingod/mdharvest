@@ -33,23 +33,30 @@ NOTES:
 
 import sys
 import os
-import getopt
+import argparse
 import uuid
 import lxml.etree as ET
 import codecs
 import yaml
+from harvest_metadata import initialise_logger
+import logging
+from logging.handlers import TimedRotatingFileHandler
 
-def usage():
-    print(sys.argv[0]+" [options] input")
-    print("\t-h|--help: dump this information")
-    print("\t-c|--cfg: specify configuration file (same as mdharvest)")
-    print("\t-i|--indir: specify where to get input")
-    print("\t-o|--outdir: specify where to put results")
-    print("\t-s|--style: specify the stylesheet to use")
-    print("\t-x|--xmd: input is MM2 with XMD files")
-    print("\t-p|--parent: UUID of parent dataset")
-    print("\t-f|--file: treat input as file, not directory")
-    sys.exit(2)
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("-c","--config",dest="cfgfile", help="Configuration file containing endpoints to harvest", required=True)
+    parser.add_argument("-l","--logfile",dest="logfile", help="Log file", required=True)
+    parser.add_argument('-s','--sources',dest='sources',help='Comma separated list of sources (in config) to harvest',required=False)
+    parser.add_argument('-x','--xmdfile', dest='xmd',help='Converting MM2 to MMD (need to read XMD files)',action='store_true')
+
+    args = parser.parse_args()
+
+    if args.cfgfile is None:
+        parser.print_help()
+        parser.exit()
+
+    return args
 
 def create_uuid(infile,lastupdate):
     string2use = "https://arcticdata.met.no/ds/"+os.path.basename(infile)+"-"
@@ -69,14 +76,7 @@ def check_directories(cfg):
     return(0)
 
 #class ProcessFiles(object):
-def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
-    """
-    Create object and methods
-    """
-
-    #def __init__(self, myflags, myfiles, outdir, mycollections, mytransform):
-    #    self.
-
+def process_files(xflg, myfiles, indir, outdir, mycollections, mytransform):
 
     # Process files
     i=1
@@ -85,9 +85,7 @@ def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
         xmlfile = s.join((indir,myfile))
         print("Processing",xmlfile, i)
         if myfile.endswith(".xml"):
-            if myflags['xflg']:
-                # while testing
-                # xmdfile = s.join((indir,myfile.replace(".xml",".xmd")))
+            if xflg:
                 if not os.path.isfile(xmdfile):
                     print(xmdfile, "not found")
                     continue
@@ -99,26 +97,18 @@ def process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
                 myuuid = create_uuid(xmlfile,xmdlastupdate)
             i += 1
             inxml = ET.parse(xmlfile)
-            if myflags['xflg']:
-                if pflg:
-                    newxml = mytransform(inxml,
-                        xmd=ET.XSLT.strparam(xmdfile),
-                        mmdid=ET.XSLT.strparam(str(myuuid)),
-                        parentDataset=ET.XSLT.strparam(str(parentUUID)))
-                else:
-                    newxml = mytransform(inxml,
-                        xmd=ET.XSLT.strparam(xmdfile),
-                        mmdid=ET.XSLT.strparam(str(myuuid)))
+            if xflg:
+                newxml = mytransform(inxml,
+                    xmd=ET.XSLT.strparam(xmdfile),
+                    mmdid=ET.XSLT.strparam(str(myuuid)))
             else:
                 newxml = mytransform(inxml)
-            #print(type(newxml))
-            #sys.exit()
             output = codecs.open(s.join((outdir,myfile)),"w", "utf-8")
             output.write(ET.tostring(newxml,
                 pretty_print=True).decode('utf-8'))
             output.close()
 
-    #return(0)
+    return
 
 def main(argv):
     # This is the main method
@@ -127,88 +117,42 @@ def main(argv):
 
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hc:i:o:s:xp:f:",
-                ["help","cfg","indir","outdir","style","xmd","parent","file"])
-    except getopt.GetoptError:
-        usage()
+        args = parse_arguments()
+    except:
+        raise SystemExit('Command line arguments didn\'t parse correctly.')
 
-    cflg = iflg = oflg = sflg = xflg = pflg = fflg = False
-    for opt, arg in opts:
-        if opt == ("-h","--help"):
-            usage()
-        elif opt in ("-c","--cfg"):
-            cfgfile = arg
-            cflg = True
-        elif opt in ("-i","--indir"):
-            indir = arg
-            iflg = True
-        elif opt in ("-o","--outdir"):
-            outdir = arg
-            oflg = True
-        elif opt in ("-s","--style"):
-            stylesheet = arg
-            sflg = True
-        elif opt in ("-x","--xmd"):
-            xflg = True
-        elif opt in ("-p","--parent"):
-            parentUUID = arg
-            pflg = True
-        elif opt in ("-f","--file"):
-            xmlfile = arg
-            fflg = True
+    if args.sources:
+        mysources = args.sources.split(',')
 
-    if (not cflg) and (not fflg):
-        usage()
-    #elif not iflg:
-    #    usage()
-    #elif not oflg:
-    #    usage()
-    #elif not sflg:
-    #    usage()
-    myflags = {'cflg':cflg, 'xflg':xflg, 'pflg': pflg}
+    # Set up logging
+    print(args.logfile)
+    mylog = initialise_logger(args.logfile)
+    mylog.info('\n==========\nConfiguration of logging is finished.')
 
     # Read config file
-    if not fflg:
-        print("Reading", cfgfile)
-        with open(cfgfile, 'r') as ymlfile:
-            cfg = yaml.load(ymlfile)
+    mylog.info("Reading configuration from: %s", args.cfgfile)
+    with open(args.cfgfile, 'r') as ymlfile:
+        cfg = yaml.full_load(ymlfile)
+
+    xflg = pflg = False
+
+    # Read config file
+    print("Reading", args.cfgfile)
+    with open(args.cfgfile, 'r') as ymlfile:
+        cfg = yaml.full_load(ymlfile)
 
     # Check that all relevant directories exists...
-    if not fflg:
-        if check_directories(cfg):
-            print("Something went wrong creating directories")
-            sys.exit(2)
-
-    if fflg:
-        # Define stylesheet and modify accordingly
-        parser = ET.XMLParser(remove_blank_text=True)
-        try:
-            myxslt = ET.parse(stylesheet, parser)
-        except ET.XMLSyntaxError as e:
-            print(e)
-            sys.exit(1)
-        mytransform = ET.XSLT(myxslt)
-        # Input file
-        inxml = ET.parse(xmlfile)
-        newxml = mytransform(inxml)
-        s = '/'
-        output = codecs.open(s.join((outdir,os.path.basename(xmlfile))),"w", "utf-8")
-        output.write(ET.tostring(newxml, pretty_print=True))
-        output.close()
-        sys.exit()
+    if check_directories(cfg):
+        print("Something went wrong creating directories")
+        sys.exit(2)
 
     # Each section is a data centre to harvest
     for section in sorted(cfg.keys()):
         print("=========================")
         print("Now processing:",section)
-        #if section in ['BAS', 'CCIN', 'WGMS', 'NILU']:
-        #    continue
-        #if section not in [ 'NILU','CCIN','WGMS']:
-        #if section not in [ 'NILU','NIPR-ADS-YOPP','PANGAEA-YOPP']:
-        #if section not in [ 'NERSC-NORMAP','NERSC-INFRANOR']:
-        #    continue
-        #if section not in [ 'PPD', 'NPI','IMR','NERSC-NORMAP','NERSC-INFRANOR']:
-        #    continue
+        if args.sources:
+            if section not in mysources:
+                continue
         indir = cfg[section]['raw']
         outdir = cfg[section]['mmd']
         if cfg[section]['mdkw'] in mydif:
@@ -224,7 +168,6 @@ def main(argv):
             mycollections = cfg[section]['collection'].replace(' ','')
         else:
             mycollections = None
-        #print mycollections.split(',')
 
         # Define stylesheet and modify accordingly
         parser = ET.XMLParser(remove_blank_text=True)
@@ -267,7 +210,7 @@ def main(argv):
             sys.exit(1)
 
         # Process files
-        if process_files(myflags, myfiles, indir, outdir, mycollections, mytransform):
+        if process_files(args.xmd, myfiles, indir, outdir, mycollections, mytransform):
             print("Something went wrong processing files")
             sys.exit(2)
 

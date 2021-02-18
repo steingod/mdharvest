@@ -25,18 +25,34 @@ COMMENTS:
 
 import sys
 import os
-import getopt
+import argparse
 import yaml
-from harvest_metadata import MetadataHarvester
+from harvest_metadata import *
 import logging
+from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime
 
-def usage():
-    print(sys.argv[0]+" [options] input")
-    print("\t-h|--help: dump this information")
-    print("\t-c|--config: specify the configuration file to use")
-    print("\t-l|--logfile: specify the logfile to use")
-    print("\t-f|--from: specify DateTime to harvest from")
-    sys.exit(2)
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("-c","--config",dest="cfgfile", help="Configuration file containing endpoints to harvest", required=True)
+    parser.add_argument("-l","--logfile",dest="logfile", help="Log file", required=True)
+    parser.add_argument("-f","--from",dest="fromTime", help="DateTime to  harvest fromday in the form YYYY-MM-DD", required=False)
+    parser.add_argument('-s','--sources',dest='sources',help='Comma separated list of sources (in config) to harvest',required=False)
+
+    args = parser.parse_args()
+
+    if args.fromTime:
+        try:
+            datetime.strptime(args.fromTime,'%Y-%m-%d')
+        except ValueError:
+            raise ValueError
+
+    if args.cfgfile is None:
+        parser.print_help()
+        parser.exit()
+
+    return args
 
 def check_directories(cfg):
     for section in cfg:
@@ -56,43 +72,22 @@ def check_directories(cfg):
 def main(argv):
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(argv,"hc:l:f:",
-                ["help","config","logfile","from"])
-    except getopt.GetoptError:
-        usage()
+        args = parse_arguments()
+    except:
+        raise SystemExit('Command line arguments didn\'t parse correctly.')
 
-    cflg = lflg = fflg = False
-    for opt, arg in opts:
-        if opt == ("-h","--help"):
-            usage()
-        elif opt in ("-c","--config"):
-            cfgfile = arg
-            cflg =True
-        elif opt in ("-l","--logfile"):
-            logfile = arg
-            lflg =True
-        elif opt in ("-f","--from"):
-            fromTime = arg
-            fflg =True
-
-    if not cflg:
-        usage()
-    elif not lflg:
-        usage()
+    if args.sources:
+        mysources = args.sources.split(',')
 
     # Set up logging
-    logging.basicConfig(filename=logfile,level=logging.INFO,
-            format='%(asctime)s %(message)s')
-    logging.info("\n===============================================")
-    #logging.debug('This message should go to the log file')
-    #logging.info('So should this')
-    #logging.warning('And this, too')
+    print(args.logfile)
+    mylog = initialise_logger(args.logfile)
+    mylog.info('\n==========\nConfiguration of logging is finished.')
 
     # Read config file
-    print("Reading", cfgfile)
-    logging.info("Reading "+cfgfile)
-    with open(cfgfile, 'r') as ymlfile:
-        cfg = yaml.load(ymlfile)
+    mylog.info("Reading configuration from: %s", args.cfgfile)
+    with open(args.cfgfile, 'r') as ymlfile:
+        cfg = yaml.full_load(ymlfile)
 
     # Check that all relevant directories exists...
     if check_directories(cfg):
@@ -101,14 +96,14 @@ def main(argv):
 
     # Each section is a data centre to harvest
     for section in cfg:
-        #if section not in ['NERSC-INFRANOR','NILU']:
-        #    continue
-        print('\n=======\n')
-        print('Checking: ', section)
-        logging.info('Checking: '+section)
+        #if section not in ['NERSC-INFRANOR', 'CNR-test','PPD-test']:
+        if args.sources:
+            if section not in mysources:
+                continue
+        mylog.info('Checking: '+section)
         if cfg[section]['protocol'] == 'OAI-PMH':
             if cfg[section]['set']:
-                if fflg:
+                if args.fromTime:
                     request = "?verb=ListRecords"\
                             "&metadataPrefix="+cfg[section]['mdkw']+\
                             "&set="+cfg[section]['set']+\
@@ -118,7 +113,7 @@ def main(argv):
                             "&metadataPrefix="+cfg[section]['mdkw']+\
                             "&set="+cfg[section]['set'] 
             else:   
-                if fflg:
+                if args.fromTime:
                     request = "?verb=ListRecords"\
                             "&metadataPrefix="+cfg[section]['mdkw']+\
                             "&from="+fromTime
@@ -130,12 +125,13 @@ def main(argv):
                 request ="?SERVICE=CSW&VERSION=2.0.2"\
                         "&request=GetRecords" \
                         "&resultType=results"\
-                        "&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full"
+                        "&outputSchema=http://www.isotc211.org/2005/gmd"\
+                        "&elementSetName=full"
             elif section == "WGMS":
                 request ="?SERVICE=CSW&VERSION=2.0.2"\
                         "&request=GetRecords" \
                         "&constraintLanguage=CQL_TEXT" \
-                        "&typeNames=gmd:MD_Metadata"\
+                        "&typeNames=csw:Record"\
                         "&resultType=results"\
                         "&outputSchema=http://www.isotc211.org/2005/gmd" \
                         "&elementSetName=full"
@@ -148,9 +144,8 @@ def main(argv):
                         "&outputSchema=http://www.isotc211.org/2005/gmd" \
                         "&elementSetName=full"
         else:
-            print("Protocol not supported yet")
-            logging.warn("Protocol not supported yet")
-        print(request)
+            mylog.warn("Protocol not supported yet")
+        #print(request)
         numRec = 0
         mh = MetadataHarvester(cfg[section]['source'],
                 request,cfg[section]['raw'],
@@ -159,14 +154,10 @@ def main(argv):
         try: 
             numRec = mh.harvest()
         except Exception as e:
-            print("Something went wrong on harvest from", section)
-            print(str(e))
-            logging.warn("Something went wrong on harvest from "+section)
-            logging.warn(str(e))
-        print("Number of records harvested", section, numRec)
-        logging.info("Number of records harvested "+section+': '+str(numRec))
+            mylog.warn("Something went wrong on harvest from "+section)
+            mylog.warn(str(e))
+        mylog.info("Number of records harvested "+section+': '+str(numRec))
 
-    logging.shutdown()
     sys.exit(0)
 
 if __name__ == '__main__':
