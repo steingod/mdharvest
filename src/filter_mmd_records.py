@@ -23,9 +23,10 @@ UPDATED:
         Changed name, plus updated
     Øystein Godøy, METNO/FOU, 2018-06-23 
         Added parameter match
+    Øystein Godøy, METNO/FOU, 2021-02-18 
+        Cleaning of code, logging implemented and errors corrected.
 
 NOTES:
-    - Not working...
     - Using the same configuration as harvest and transformation
     - Once working for bounding box, create functions for specific
       purposes...
@@ -47,21 +48,6 @@ from dateutil.parser import parse
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from harvest_metadata import initialise_logger
-
-def usage():
-    print(sys.argv[0]+" [options] input")
-    print("\t-h|--help: dump this information")
-    print("\t-c|--configuration: specify where to find the configuration file")
-    print("\t-l|--collection: specify collection to tag the dataset with")
-    print("\t-p|--parameters: specify parameters to filter on (comma separated)")
-    print("\t-b|--bounding: specify the bounding box (N, E, S, W) as comma separated list")
-    print("\t-a|--aen: checks project affiliation and adds Nansen Legacy collection")
-    print("\t-g|--gcw: checks cryosphere parameters (and adds GCW collection)")
-    print("\t-s|--sios: checks bounding box (and adds SIOS collection)")
-    print("\t-i|--infranor: checks project affiliation and adds InfraNOR collection")
-    print("\t-n|--nmap: checks project affiliation (and adds NMAP collection)")
-    print("Options a, g, i, n, and s cannot be used simultaneously")
-    sys.exit(2)
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -89,8 +75,10 @@ def parse_arguments():
     return args
 
 class LocalCheckMMD():
-    def __init__(self, section, mmd_file, bounding, parameters, mycollection,
+    def __init__(self, logname, section, mmd_file, bounding, parameters, mycollection,
             project):
+        self.logger = logging.getLogger('.'.join([logname,'LocalCheckMMD']))
+        self.logger.info('Creating an instance of LocalCheckMMD')
         self.section = section
         self.mmd_file = mmd_file
         self.bbox = bounding
@@ -103,7 +91,7 @@ class LocalCheckMMD():
 
         if isinstance(self.project,list):
             for proj in self.project:
-                print(proj)
+                self.logger('Project %s',proj)
                 if any(proj in mystring.text for mystring in elements):
                     projmatch = True
         else:
@@ -141,51 +129,59 @@ class LocalCheckMMD():
     def check_bounding_box(self,elements,root):
         #print("####",elements)
         if len(elements) > 1:
-            print("Found more than one element, not handling this now...")
+            self.logger.warn("Found more than one element, not handling this now...")
             return False
         #print(ET.tostring(elements[0],pretty_print=True))
         # Decode bounding box from XML
         thisbb = []
         for el in elements:
             if el.find('mmd:north',namespaces=root.nsmap).text is None:
-                print('mmd:north is empty')
+                self.logger.warn('mmd:north is empty')
                 return(False)
             else:
-                northernmost = float(el.find('mmd:north',namespaces=root.nsmap).text)
-                thisbb.append(northernmost)
+                myvalue = el.find('mmd:north',namespaces=root.nsmap).text.strip()
+                if len(myvalue)>0:
+                    northernmost = float(myvalue)
+                    thisbb.append(northernmost)
             if el.find('mmd:east',namespaces=root.nsmap).text is None:
-                print('mmd:east is empty')
+                self.logger.warn('mmd:east is empty')
                 return(False)
             else:
-                easternmost = float(el.find('mmd:east',namespaces=root.nsmap).text)
-                thisbb.append(easternmost)
+                myvalue = el.find('mmd:east',namespaces=root.nsmap).text.strip()
+                if len(myvalue)>0:
+                    easternmost = float(myvalue)
+                    thisbb.append(easternmost)
             if el.find('mmd:south',namespaces=root.nsmap).text is None:
-                print('mmd:south is empty')
+                self.logger.warn('mmd:south is empty')
                 return(False)
             else:
-                southernmost = float(el.find('mmd:south',namespaces=root.nsmap).text)
-                thisbb.append(southernmost)
+                myvalue = el.find('mmd:south',namespaces=root.nsmap).text.strip()
+                if len(myvalue)>0:
+                    southernmost = float(myvalue)
+                    thisbb.append(southernmost)
             if el.find('mmd:west',namespaces=root.nsmap).text is None:
-                print('mmd:west is empty')
+                self.logger.warn('mmd:west is empty')
                 return(False)
             else:
-                westernmost = float(el.find('mmd:west',namespaces=root.nsmap).text)
-                thisbb.append(westernmost)
+                myvalue = el.find('mmd:west',namespaces=root.nsmap).text.strip()
+                if len(myvalue)>0:
+                    westernmost = float(myvalue)
+                    thisbb.append(westernmost)
 
         # Check bounding box
         # Lists are ordered N, E, S, W
-        print("This bounding box",thisbb)
-        print("Reference bounding box",self.bbox)
-        if len(thisbb)==0:
+        self.logger.info("This bounding box: %s",thisbb)
+        self.logger.info("Reference bounding box: %s",self.bbox)
+        if len(thisbb)<4:
             return(False)
         latmatch = False
         lonmatch = False
         if (thisbb[0] < self.bbox[0]) and (thisbb[2] > self.bbox[2]):
             latmatch = True
-            print("Latitude match")
+            self.logger.info("Latitude match")
         if (thisbb[1] < self.bbox[1]) and (thisbb[3] > self.bbox[3]):
             lonmatch = True
-            print("Longitude match")
+            self.logger.info("Longitude match")
 
         if (latmatch and lonmatch):
             return True
@@ -216,7 +212,7 @@ class LocalCheckMMD():
             elements = tree.findall("mmd:geographic_extent",
                     namespaces=mynsmap)
             if len(elements) != 1:
-                print("Error in bounding box (too few or too many)...")
+                self.logger.warn("Error in bounding box (too few or too many)...")
                 setInactive = True
             bboxfields = ['mmd:north','mmd:east','mmd:south','mmd:west']
             if tree.find('mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap) is not None:
@@ -229,7 +225,7 @@ class LocalCheckMMD():
                             if myvalue == None or myvalue.isspace():
                                 setInactive = True
             else:
-                print("No bounding box found in data.")
+                self.logger.warn("No bounding box found in data.")
                 setInactive = True
             # Check for multiple temporal periods
             # This should be removed as this is supported by the MMD
@@ -237,7 +233,7 @@ class LocalCheckMMD():
             elements = tree.findall("mmd:temporal_extent",
                     namespaces=mynsmap)
             if len(elements) != 1:
-                print("Too few or too many temporal extent elements...")
+                self.logger.warn("Too few or too many temporal extent elements...")
                 setInactive = True
             # Check DateTime strings (to be removed later)
             if not setInactive:
@@ -293,7 +289,7 @@ class LocalCheckMMD():
                 myel = '//mmd:collection[text()="'+item+'"]'
                 myelement = tree.xpath(myel, namespaces=mynsmap)
                 if myelement:
-                    print("Already belongs to",item)
+                    self.logger.warn("Already belongs to %s",item)
                     #tmpcoll.remove(item)
                 else:
                     # Add new collections
@@ -320,57 +316,13 @@ def main(argv):
         mysources = args.sources.split(',')
 
     # Set up logging
-    print(args.logfile)
-    mylog = initialise_logger(args.logfile)
+    mylog = initialise_logger(args.logfile, 'filter_mmd_records')
     mylog.info('\n==========\nConfiguration of logging is finished.')
 
     # Read config file
-    mylog.info("Reading configuration from: %s", args.cfgfile)
+    #mylog.info("Reading configuration from: %s", args.cfgfile)
     with open(args.cfgfile, 'r') as ymlfile:
         cfg = yaml.full_load(ymlfile)
-
-    # Parse command line arguments
-##    try:
-##        opts, args = getopt.getopt(argv,"hc:p:b:l:gsnai",
-##                ["help",
-##                    "configuration","parameters","bounding",
-##                    "collection","gcw","sios","nmap","aen","infranor"])
-##    except getopt.GetoptError:
-##        usage()
-##
-##    cflg = pflg = bflg = lflg = gflg = sflg = nflg = aflg = iflg = False
-##    for opt, arg in opts:
-##        if opt == ("-h","--help"):
-##            usage()
-##        elif opt in ("-c","--configuration"):
-##            cfgfile = arg
-##            cflg = True
-##        elif opt in ("-p","--parameters"):
-##            parameters = arg
-##            pflg = True
-##        elif opt in ("-b","--bounding"):
-##            bounding = arg
-##            bflg = True
-##        elif opt in ("-l","--collection"):
-##            collection = arg
-##            lflg = True
-##        elif opt in ("-a","--aen"):
-##            aflg = True
-##        elif opt in ("-g","--gcw"):
-##            gflg = True
-##        elif opt in ("-s","--sios"):
-##            sflg = True
-##        elif opt in ("-i","--infranor"):
-##            iflg = True
-##        elif opt in ("-n","--nmap"):
-##            nflg = True
-##
-##    if not cflg:
-##        usage()
-##    elif not (lflg or gflg or sflg or nflg or iflg or aflg):
-##        usage()
-##    if (nflg and sflg) or (sflg and gflg) or (nflg and gflg):
-##        usage()
 
     # Define parameters to find
     # Not working yet...
@@ -406,7 +358,7 @@ def main(argv):
         collection = None
 
     # Read config file
-    print("Reading", args.cfgfile)
+    mylog.info("Reading configuration from: %s", args.cfgfile)
     with open(args.cfgfile, 'r') as ymlfile:
         cfg = yaml.full_load(ymlfile)
 
@@ -418,34 +370,31 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
-        print("Filtering records from:", section)
-        #if section in ["CCIN","PPD","EUMETSAT-OAI","ECCC"]:
-        #    print("Skipping section")
-        #    continue
-        if section not in ['NPI','NSIDC']:
-            continue
+        if args.sources:
+            if section not in mysources:
+                continue
+        mylog.info("Filtering records from: %s", section)
+
         # Find files to process
         try:
             myfiles = os.listdir(cfg[section]['mmd'])
         except os.error:
-            print(os.error)
+            mylog.error('Couldn\'t find files to process: %s', os.error)
             sys.exit(1)
 
         # Process files, dump valid filenames to file
-        f = open("tmpfile.txt","w+")
         i=1
         s = "/"
         for myfile in myfiles:
             if myfile.endswith(".xml"):
-                print(i, myfile)
+                mylog.info('Processing file %d, %s', i, myfile)
                 i += 1
-                file2check = LocalCheckMMD(section,s.join((cfg[section]['mmd'],myfile)),
-                        bounding, parameters, collection, project)
+                file2check = LocalCheckMMD('filter_mmd_records', section,s.join((cfg[section]['mmd'],myfile)), bounding, parameters, collection, project)
                 if file2check.check_mmd():
-                    print("Success")
+                    mylog.info("Success")
                 else:
-                    print("Failure")
-        f.close()
+                    mylog.info("Failure")
+    mylog.info('Processing finsihed.')
 
 
 if __name__ == '__main__':
