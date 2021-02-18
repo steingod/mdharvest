@@ -40,7 +40,7 @@ from datetime import datetime
 import lxml.etree as ET
 import logging
 
-module_logger = logging.getLogger('mdharvest')
+#module_logger = logging.getLogger('mdharvest')
 
 def parse_cfg(cfgfile):
     # Read config file
@@ -50,7 +50,9 @@ def parse_cfg(cfgfile):
 
     return cfgstr
 
-def initialise_logger(outputfile = './log'):
+def initialise_logger(outputfile, name):
+    if not outputfile or not name:
+        raise IOError("Missing input parameters")
     # Check that logfile exists
     logdir = os.path.dirname(outputfile)
     if not os.path.exists(logdir):
@@ -59,7 +61,7 @@ def initialise_logger(outputfile = './log'):
         except:
             raise IOError
     # Set up logging
-    mylog = logging.getLogger('mdharvest')
+    mylog = logging.getLogger(name)
     mylog.setLevel(logging.INFO)
     #logging.basicConfig(level=logging.INFO, 
     #        format='%(asctime)s - %(levelname)s - %(message)s')
@@ -79,13 +81,26 @@ def initialise_logger(outputfile = './log'):
 
     return(mylog)
 
+def check_directories(cfg):
+    for section in cfg:
+        for name in ['raw','mmd']:
+            if not os.path.isdir(cfg[section][name]):
+               try:
+                   os.makedirs(cfg[section][name])
+               except:
+                   print("Could not create output directory")
+                   return(2)
+    return(0)
+
 class MetadataHarvester(object):
     """ 
     Creates metadata-harvester object with methods for harvesting and writing
     """
-    def __init__(self, baseURL, records, outputDir, hProtocol, 
+    def __init__(self, logname, baseURL, records, outputDir, hProtocol, 
             srcfmt = None, username=None, pw=None):
         """ set variables in class """
+        self.logger = logging.getLogger('.'.join([logname,'MetadataHarvester']))
+        self.logger.info('Creating an instance of LocalCheckMMD')
         self.baseURL = baseURL
         self.records = records
         self.outputDir = outputDir
@@ -113,7 +128,7 @@ class MetadataHarvester(object):
             start_time = datetime.now()
 
             # Initial phase
-            print("\tURL request:",getRecordsURL)
+            self.logger.info("\tURL request: %s",getRecordsURL)
             myxml = self.harvestContent(getRecordsURL)
             if myxml != None:
                 if "dif" in self.srcfmt:
@@ -123,24 +138,22 @@ class MetadataHarvester(object):
                 else:
                     raise "Metadata format not supported yet."
             else:
-                print("Server is not responding properly")
+                self.logger.error("Server is not responding properly")
                 raise IOError("Server to harvest is not responding properly")
                 return(0)
             pageCounter = 1
             resumptionToken = myxml.find('.//{*}resumptionToken')
             if resumptionToken == None:
-                print("Nothing more to do")
+                self.logger.info("Nothing more to do")
             else:
                 resumptionToken = resumptionToken.text
 
-            print("====")
-            print("Resumption token found: ",resumptionToken)
-            print("====")
+            self.logger.info("Resumption token found: %s",resumptionToken)
 
             # Manage resumptionToken, i.e. segmentation of results in
             # pages
             while resumptionToken != None:
-                print("\n\tHandling resumptionToken: %.0f" % pageCounter)
+                self.logger.info("\tHandling resumptionToken: %.0f" % pageCounter)
                 # create resumptionToken URL parameter
                 #resumptionToken = urlencode({'resumptionToken':resumptionToken})
                 resumptionToken = 'resumptionToken='+resumptionToken
