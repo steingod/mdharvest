@@ -15,11 +15,11 @@ AUTHOR:
 UPDATED:
     Øystein Godøy, METNO/FOU, 2018-05-10 
         Modified to Python
+    Øystein Godøy, METNO/FOU, 2021-02-18 
+        Added logging and corrected some bugs. Improved error handling and selective harvesting.
 
-COMMENTS:
-    - Add logging
-    - Add selective harvest (interactive based on config)
-    - Add temporal span for OAI-PMH harvest (missing for CSW)
+NOTES:
+    - NA
 
 """
 
@@ -54,20 +54,6 @@ def parse_arguments():
 
     return args
 
-def check_directories(cfg):
-    for section in cfg:
-        for name in ['raw','mmd']:
-            #print section, name
-            ##print cfg[section][name]
-            if not os.path.isdir(cfg[section][name]):
-               try:
-                   os.makedirs(cfg[section][name])
-               except:
-                   print("Could not create output directory")
-                   return(2)
-    return(0)
-
-
 ###########################################################
 def main(argv):
     # Parse command line arguments
@@ -81,7 +67,7 @@ def main(argv):
 
     # Set up logging
     print(args.logfile)
-    mylog = initialise_logger(args.logfile)
+    mylog = initialise_logger(args.logfile,'run-harvest')
     mylog.info('\n==========\nConfiguration of logging is finished.')
 
     # Read config file
@@ -96,7 +82,6 @@ def main(argv):
 
     # Each section is a data centre to harvest
     for section in cfg:
-        #if section not in ['NERSC-INFRANOR', 'CNR-test','PPD-test']:
         if args.sources:
             if section not in mysources:
                 continue
@@ -145,9 +130,8 @@ def main(argv):
                         "&elementSetName=full"
         else:
             mylog.warn("Protocol not supported yet")
-        #print(request)
         numRec = 0
-        mh = MetadataHarvester(cfg[section]['source'],
+        mh = MetadataHarvester('run-harvest', cfg[section]['source'],
                 request,cfg[section]['raw'],
                 cfg[section]['protocol'],
                 cfg[section]['mdkw'])
