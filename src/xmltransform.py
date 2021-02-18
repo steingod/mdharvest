@@ -38,7 +38,7 @@ import uuid
 import lxml.etree as ET
 import codecs
 import yaml
-from harvest_metadata import initialise_logger
+from harvest_metadata import initialise_logger, check_directories
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
@@ -64,30 +64,20 @@ def create_uuid(infile,lastupdate):
     myuuid = uuid.uuid5(uuid.NAMESPACE_URL,string2use)
     return(myuuid)
 
-def check_directories(cfg):
-    for section in cfg:
-        for name in ['raw','mmd']:
-            if not os.path.isdir(cfg[section][name]):
-               try:
-                   os.makedirs(cfg[section][name])
-               except:
-                   print("Could not create output directory")
-                   return(2)
-    return(0)
-
 #class ProcessFiles(object):
 def process_files(xflg, myfiles, indir, outdir, mycollections, mytransform):
 
+    mylog = logging.getLogger('xmltransform')
     # Process files
     i=1
     s = "/"
     for myfile in myfiles:
         xmlfile = s.join((indir,myfile))
-        print("Processing",xmlfile, i)
+        mylog.info("Processing file %d: %s",i, xmlfile)
         if myfile.endswith(".xml"):
             if xflg:
                 if not os.path.isfile(xmdfile):
-                    print(xmdfile, "not found")
+                    mylog.warn('Could not find xmdfile: %s', xmdfile)
                     continue
                 xmd = ET.parse(xmdfile)
                 xmdlastupdate = xmd.xpath("//ds:info/@datestamp", \
@@ -125,9 +115,9 @@ def main(argv):
         mysources = args.sources.split(',')
 
     # Set up logging
-    print(args.logfile)
-    mylog = initialise_logger(args.logfile)
+    mylog = initialise_logger(args.logfile,'xmltransform')
     mylog.info('\n==========\nConfiguration of logging is finished.')
+    #mylog.info('Logging to: %s', args.logfile)
 
     # Read config file
     mylog.info("Reading configuration from: %s", args.cfgfile)
@@ -137,19 +127,18 @@ def main(argv):
     xflg = pflg = False
 
     # Read config file
-    print("Reading", args.cfgfile)
+    mylog.info("Reading configuration file %s", args.cfgfile)
     with open(args.cfgfile, 'r') as ymlfile:
         cfg = yaml.full_load(ymlfile)
 
     # Check that all relevant directories exists...
     if check_directories(cfg):
-        print("Something went wrong creating directories")
+        mylog.error("Something went wrong creating directories")
         sys.exit(2)
 
     # Each section is a data centre to harvest
     for section in sorted(cfg.keys()):
-        print("=========================")
-        print("Now processing:",section)
+        mylog.info("Now processing: %s",section)
         if args.sources:
             if section not in mysources:
                 continue
@@ -161,8 +150,7 @@ def main(argv):
             stylesheet =  '../etc/iso-to-mmd.xsl'
         else:
             stylesheet = None
-            print('Check configuration, no stylesheet specified...')
-            print('Skipping these records')
+            mylog.warning('Check configuration, no stylesheet specified.  Skipping these records') 
             continue
         if cfg[section]['collection']:
             mycollections = cfg[section]['collection'].replace(' ','')
@@ -174,7 +162,7 @@ def main(argv):
         try:
             myxslt = ET.parse(stylesheet, parser)
         except ET.XMLSyntaxError as e:
-            print(e)
+            mylog.error('XSLT parser error: %s',e)
             sys.exit(1)
         myroot = myxslt.getroot()
         # Find the location where to insert element
@@ -189,7 +177,7 @@ def main(argv):
             #    print "Can't find the requested element, bailing out"
             #    sys.exit(2)
             if len(myelement) == 0:
-                print("Can't find the requested element, bailing out")
+                mylog.error("Can't find the requested element, bailing out")
                 sys.exit(2)
 
             myparent = myelement[0].getparent()
@@ -206,13 +194,15 @@ def main(argv):
         try:
             myfiles = os.listdir(indir)
         except OSError as e:
-            print(e)
+            mylog.error('Can\'t find the files to process: %s',e)
             sys.exit(1)
 
         # Process files
         if process_files(args.xmd, myfiles, indir, outdir, mycollections, mytransform):
-            print("Something went wrong processing files")
+            mylog.error("Something went wrong processing files")
             sys.exit(2)
+
+    mylog.info('Transformation completed')
 
 
 if __name__ == '__main__':
