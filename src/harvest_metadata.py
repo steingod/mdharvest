@@ -170,11 +170,8 @@ class MetadataHarvester(object):
                     self.logger.info("myxml = %s, for page %s", str(myxml), str(pageCounter))
 
                 resumptionToken = myxml.find('.//{*}resumptionToken')
-                #print(">>>>>>",resumptionToken)
                 if resumptionToken != None:
                     resumptionToken = resumptionToken.text
-                #else:
-                #    print(ET.tostring(myxml))
 
                 pageCounter += 1
 
@@ -400,7 +397,7 @@ class MetadataHarvester(object):
                 }
         record_elements =  dom.xpath('/oai:OAI-PMH/oai:ListRecords/oai:record', 
                 namespaces=myns)
-        self.logger.info("\n\tNumber of records found: %d",len(record_elements)+1)
+        self.logger.info("\n\tNumber of records found: %d",len(record_elements))
         size_dif = len(record_elements)
 
         counter = 0
@@ -432,8 +429,8 @@ class MetadataHarvester(object):
                         namespaces=myns)
 
                 # Dump to file
-                self.write_to_file(difrec, difid)
                 counter += 1
+                self.write_to_file(difrec, difid)
         else:
             self.logger.info("\n\tRecords did not contain DIF elements")
 
