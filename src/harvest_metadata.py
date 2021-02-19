@@ -15,6 +15,8 @@ UPDATED:    Øystein Godøy, METNO/FOU, 2017-12-12
                 Working version with OGC CSW as well
             Øystein Godøy, METNO/FOU, 2019-06-03 
                 Better handling of character encoding.
+            Øystein Godøy, METNO/FOU, 2021-02-19 
+                Improved logging and character encoding.
 
 USAGE:
     - See usage
@@ -27,10 +29,8 @@ COMMENTS (for further development):
     - self-numRecHarv is incorrect when harvest fails
 """
 
-#import urllib2 as ul2
 import urllib.request as ul
 from urllib.parse import urlencode, quote_plus
-#import requests
 from xml.dom.minidom import parseString # To be removed
 import codecs
 import sys
@@ -39,8 +39,6 @@ import getopt
 from datetime import datetime
 import lxml.etree as ET
 import logging
-
-#module_logger = logging.getLogger('mdharvest')
 
 def parse_cfg(cfgfile):
     # Read config file
@@ -337,7 +335,7 @@ class MetadataHarvester(object):
                 }
         record_elements =  dom.xpath('/oai:OAI-PMH/oai:ListRecords/oai:record', 
                 namespaces=myns)
-        self.logger.info("\n\tNumber of records found",len(record_elements)+1)
+        self.logger.info("\n\tNumber of records found: %d",len(record_elements)+1)
         size_dif = len(record_elements)
 
         counter = 0
@@ -356,7 +354,7 @@ class MetadataHarvester(object):
                 # Challenges arise when oaiid and isoid are different as
                 # isoid is used as the filename...
                 if delete_status != None:
-                    self.logger.warn("This record has been deleted"+"\n\t",oaiid)
+                    self.logger.warn("This record has been deleted:\n\t%s",oaiid)
                 isoid = record.find('oai:metadata/gmi:MI_Metadata/gmd:fileIdentifier/gco:CharacterString',
                         namespaces=myns)
                 if isoid == None:
@@ -468,7 +466,6 @@ class MetadataHarvester(object):
 
     def harvestContent(self,URL,credentials=False,uname="foo",pw="bar"):
         """ Function for harvesting content from URL."""
-        #print(">>>>>>>>>>>>",URL)
         try:
             if not credentials:
                 # Timeout depends on user, 60 seconds is too little for
@@ -476,32 +473,30 @@ class MetadataHarvester(object):
                 myreq = ul.Request(URL)
                 try:
                     with ul.urlopen(myreq,timeout=60) as response:
-                        #print('>>>>', response.getheader('Content-Type'))
+                        ##print('>>>>', response.getheader('Content-Type'))
                         # This is a bit awkward, but in order to improve robustness, multiple checks are required. Could be simplified, but not necessarily more readable.
                         if response.getheader('Content-Type') is None:
+                            self.logger.warn('No Content-Type received from the server.')
                             myencoding = 'UTF-8'
                         elif 'charset' in response.getheader('Content-Type'):
                             myencoding = response.getheader('Content-Type').split('=',1)[1] 
                         else:
+                            self.logger.warn('No Content-Type received from the server. Not sure why we ended up here.')
                             myencoding = 'UTF-8'
                         #myfile = bytes(response.read())
                         myfile = response.read()
                     myparser = ET.XMLParser(ns_clean=True,
                             encoding=myencoding)
                     try:
-                        #f = open('myfile.xml','w')
-                        #print(myfile, file=f)
-                        #f.close()
                         data = ET.fromstring(myfile,myparser)
-                        #print('>>>>>', data)
                     except Exception as e:
-                        print('Parsing the harvested information failed due to', e)
+                        self.logger.error('Parsing the harvested information failed due to: %s', e)
                     return data
                 except Exception as e:
                     self.logger.error('Couldn not retrieve data: %s', e)
             else:
                 # Not working with lxml
-                print("Not implemented yet...")
+                self.logger.warn("Authenticated and authorised use is not implemented yet...")
                 return
 #                p = ul.HTTPPasswordMgrWithDefaultRealm()
 #                p.add_password(None, URL, uname, pw)
