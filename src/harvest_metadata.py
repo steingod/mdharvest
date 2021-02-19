@@ -477,7 +477,10 @@ class MetadataHarvester(object):
                 try:
                     with ul.urlopen(myreq,timeout=60) as response:
                         #print('>>>>', response.getheader('Content-Type'))
-                        if 'charset' in response.getheader('Content-Type'):
+                        # This is a bit awkward, but in order to improve robustness, multiple checks are required. Could be simplified, but not necessarily more readable.
+                        if response.getheader('Content-Type') is None:
+                            myencoding = 'UTF-8'
+                        elif 'charset' in response.getheader('Content-Type'):
                             myencoding = response.getheader('Content-Type').split('=',1)[1] 
                         else:
                             myencoding = 'UTF-8'
@@ -495,7 +498,7 @@ class MetadataHarvester(object):
                         print('Parsing the harvested information failed due to', e)
                     return data
                 except Exception as e:
-                    self.logger.error('Couldn\'t retrieve data: %s', e)
+                    self.logger.error('Couldn not retrieve data: %s', e)
             else:
                 # Not working with lxml
                 print("Not implemented yet...")
