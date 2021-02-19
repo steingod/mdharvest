@@ -191,23 +191,25 @@ class MetadataHarvester(object):
             if cswHeader == None:
                 self.logger.error("Could not parse header response")
                 sys.exit(2)
-            numRecs = int(cswHeader.get("numberOfRecordsMatched"))
+            numRecsFound = int(cswHeader.get("numberOfRecordsMatched"))
             nextRec =  int(cswHeader.get('nextRecord'))
             self.numRecsReturned = int(cswHeader.get('numberOfRecordsReturned'))
+            print('>>>',numRecsFound,nextRec, self.numRecsReturned)
             if dom != None:
                 self.ogccsw_writeCSWISOtoFile(dom)
-            while nextRec < numRecs:
-                getRecordsURLNew = getRecordsURL
-                getRecordsURLNew += '&startposition='
-                getRecordsURLNew += str(nextRec)
-                dom = self.harvestContent(getRecordsURLNew)
-                cswHeader = dom.find('csw:SearchResults',
-                        namespaces={'csw':'http://www.opengis.net/cat/csw/2.0.2'})
-                nextRec =  int(cswHeader.get('nextRecord'))
-                self.numRecsReturned = int(cswHeader.get('numberOfRecordsReturned'))
-                self.ogccsw_writeCSWISOtoFile(dom)
-                if nextRec == 0:
-                    break
+            if nextRec > 0:
+                while nextRec < numRecsFound:
+                    getRecordsURLNew = getRecordsURL
+                    getRecordsURLNew += '&startposition='
+                    getRecordsURLNew += str(nextRec)
+                    dom = self.harvestContent(getRecordsURLNew)
+                    cswHeader = dom.find('csw:SearchResults',
+                            namespaces={'csw':'http://www.opengis.net/cat/csw/2.0.2'})
+                    nextRec =  int(cswHeader.get('nextRecord'))
+                    self.numRecsReturned = int(cswHeader.get('numberOfRecordsReturned'))
+                    self.ogccsw_writeCSWISOtoFile(dom)
+                    if nextRec == 0:
+                        break
 
             self.logger.info("Harvesting completed")
             self.logger.info("\n\tHarvesting took: %s [h:mm:ss]", str(datetime.now()-start_time))
