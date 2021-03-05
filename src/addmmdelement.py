@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 """
 PURPOSE:
@@ -35,10 +35,10 @@ import lxml.etree as ET
 import codecs
 
 def usage():
-    print sys.argv[0]+" [options] input"
-    print "\t-h|--help: dump this information"
-    print "\t-l|--list: specify list of files to operate on"
-    print "\t-s|--style: specify stylesheet to use"
+    print(sys.argv[0]+" [options] input")
+    print("\t-h|--help: dump this information")
+    print("\t-l|--list: specify list of files to operate on")
+    print("\t-s|--style: specify stylesheet to use")
     sys.exit(2)
 
 # Keeping this for now, could be useful in the future. Could also
@@ -79,18 +79,18 @@ def main(argv):
     try:
         myxslt = ET.parse(stylesheet)
     except ET.XMLSyntaxError as e:
-        print "Error parsing stylesheet: ",e
+        print("Error parsing stylesheet: ",e)
         sys.exit(1)
     mytransform = ET.XSLT(myxslt)
 
     # Find files to process
     if not os.path.isfile(filelist):
-        print "This is not a file"
+        print("This is not a file")
         sys.exit(2)
     try:
         f = open(filelist,"r")
     except IOerror:
-        print "Could not open input file"
+        print("Could not open input file")
         sys.exit(2)
     mylist = f.read().splitlines()
     f.close()
@@ -99,12 +99,12 @@ def main(argv):
     i=0
     s = "/"
     for myfile in mylist:
-        print "Processing ["+myfile+"]", i
+        print("Processing ["+myfile+"]", i)
         i += 1
         try:
             inxml = ET.parse(myfile)
         except ET.XMLSyntaxError:
-            print "Could not parse input XML"
+            print("Could not parse input XML")
             sys.exit(2)
         ET.cleanup_namespaces(inxml)
         newxml = mytransform(inxml)
