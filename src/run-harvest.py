@@ -92,7 +92,7 @@ def main(argv):
                     request = "?verb=ListRecords"\
                             "&metadataPrefix="+cfg[section]['mdkw']+\
                             "&set="+cfg[section]['set']+\
-                            "&from="+fromTime
+                            "&from="+args.fromTime
                 else:
                     request = "?verb=ListRecords"\
                             "&metadataPrefix="+cfg[section]['mdkw']+\
@@ -101,7 +101,7 @@ def main(argv):
                 if args.fromTime:
                     request = "?verb=ListRecords"\
                             "&metadataPrefix="+cfg[section]['mdkw']+\
-                            "&from="+fromTime
+                            "&from="+args.fromTime
                 else: 
                     request = "?verb=ListRecords"\
                             "&metadataPrefix="+cfg[section]['mdkw']
