@@ -109,17 +109,10 @@ class LocalCheckMMD():
 
         parmatch = False
 
-        #print "Now in check params..."
-        #for myel in elements:
-        #    print ">>>", ET.tostring(myel)
-        #    print ">>>", myel.text
-
         for par in self.params:
-            #print ">>>>>", par
-            #print type(elements)
-            if any(par in mystring.text for mystring in elements):
-                parmatch = True
-                #print ">>>>>>>>",parmatch
+            for mystring in elements:
+                if par in mystring.text.upper():
+                    parmatch = True
 
         if parmatch:
             return True
@@ -257,7 +250,7 @@ class LocalCheckMMD():
 
         # Check parameters,bounding box and project
         if self.params and not setInactive:
-            elements = tree.findall("mmd:keywords[@vocabulary='GCMD']/mmd:keyword", namespaces=mynsmap)
+            elements = tree.findall("mmd:keywords[@vocabulary='gcmd']/mmd:keyword", namespaces=mynsmap)
         if self.bbox and not setInactive:
             elements = tree.findall('mmd:geographic_extent/mmd:rectangle', namespaces=mynsmap)
         if self.project and not setInactive:
@@ -394,7 +387,7 @@ def main(argv):
                     mylog.info("Success")
                 else:
                     mylog.info("Failure")
-    mylog.info('Processing finsihed.')
+    mylog.info('Processing finished.')
 
 
 if __name__ == '__main__':
