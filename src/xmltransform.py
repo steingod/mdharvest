@@ -76,6 +76,7 @@ def process_files(xflg, myfiles, indir, outdir, mycollections, mytransform):
         mylog.info("Processing file %d: %s",i, xmlfile)
         if myfile.endswith(".xml"):
             if xflg:
+                xmdfile = xmlfile.replace('.xml','.xmd')
                 if not os.path.isfile(xmdfile):
                     mylog.warn('Could not find xmdfile: %s', xmdfile)
                     continue
@@ -148,6 +149,8 @@ def main(argv):
             stylesheet =  '../etc/dif-to-mmd.xsl'
         elif cfg[section]['mdkw'] in myiso:
             stylesheet =  '../etc/iso-to-mmd.xsl'
+        elif cfg[section]['mdkw'] in ['MM2']:
+            stylesheet =  '../etc/mm2-to-mmd.xsl'
         else:
             stylesheet = None
             mylog.warning('Check configuration, no stylesheet specified.  Skipping these records') 
