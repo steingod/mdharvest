@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # Name:
-# traverseSLF
+# traverseListfile
 #
 # Purpose:
 # Traverse OPeNDAP server without THREDDS catalogs and extract discovery
@@ -21,6 +21,8 @@ import pytz
 import uuid
 import validators
 import urllib.request
+import re
+import string
 
 # decode the list file, this is basically the address of each file to be processed
 def traverse_listfile(mylist, dstdir):
@@ -36,12 +38,14 @@ def traverse_listfile(mylist, dstdir):
         with open(mylist) as f:
             myrecords = f.readline()
         f.close()
-    # While testing... FIXME
+    mysuffix = '.das'
     for rec in myrecords:
-        print(rec)
-        outfile = os.path.basename(rec.strip())
+        print('Procewssing dataset: ',rec.decode().strip())
+        if rec.decode().strip().endswith(mysuffix):
+            newrec = os.path.splitext(rec)[0].replace(b'output/',b'')
+        outfile = os.path.basename(newrec)
         try:
-            md = Nc_to_mmd(dstdir, outfile, rec.strip(), False, False, False)
+            md = Nc_to_mmd(dstdir, outfile.decode(), str(newrec.decode()), False, False, False)
         except Exception as e:
             print('Something failed setting up ACDD extraction', e)
             continue
@@ -51,36 +55,16 @@ def traverse_listfile(mylist, dstdir):
             print('Something failed when extracting MMD elements', e)
             continue
 
-##    for rec in myrecords:
-##        print('Processing:\n\t', rec)
-##        #newdstdir = os.path.join(dstdir,mypath)
-##        newdstdir = os.path.join(dstdir)
-##        # Make more robust...
-##        if not os.path.exists(newdstdir):
-##            os.makedirs(newdstdir)
-##        infile = os.path.basename(ds)
-##        print('>>>>',infile)
-##        outfile = outfile
-##        try:
-##            md = nc_to_mmd.Nc_to_mmd(dstdir, outfile, infile, False, False, False)
-##        except Exception as e:
-##            print('Something failed setting up ACDD extraction', e)
-##            continue
-##        try:
-##            myxml = md.to_mmd()
-##        except Exception as e:
-##            print('Something failed when extracting MMD elements', e)
-##            continue
-##
-##        if myxml is None:
-##            continue
+        if myxml is None:
+            continue
 ##
 ##        # Modify the MMD file if necessary
 ##        # myxml = modifyMMD(myxml)
 ##
-##        # Create new file
-##        myxml.write(os.path.join(newdstdir,outfile), pretty_print=True)
+        # Create new file
+        myxml.write(os.path.join(dstdir,outfile.decode()), pretty_print=True)
 
+# FIXME
 def modifyMMD(myxml):
     # Modify the XML generated with information from THREDDS
     #print('Parsing XML')
