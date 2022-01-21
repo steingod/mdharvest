@@ -146,11 +146,11 @@ def main(argv):
         indir = cfg[section]['raw']
         outdir = cfg[section]['mmd']
         if cfg[section]['mdkw'] in mydif:
-            stylesheet =  '../etc/dif-to-mmd.xsl'
+            stylesheet =  '../xslt/dif-to-mmd.xsl'
         elif cfg[section]['mdkw'] in myiso:
-            stylesheet =  '../etc/iso-to-mmd.xsl'
+            stylesheet =  '../xslt/iso-to-mmd.xsl'
         elif cfg[section]['mdkw'] in ['MM2']:
-            stylesheet =  '../etc/mm2-to-mmd.xsl'
+            stylesheet =  '../xslt/mm2-to-mmd.xsl'
         else:
             stylesheet = None
             mylog.warning('Check configuration, no stylesheet specified.  Skipping these records') 

@@ -47,7 +47,7 @@
             <xsl:apply-templates select="gmd:identificationInfo/gmd:MD_DataIdentification/gmd:language" />
             
             <xsl:apply-templates select="gmd:contact/gmd:CI_ResponsibleParty" />
-            
+            <xsl:apply-templates select="gmd:identificationInfo/gmd:MD_DataIdentification/gmd:pointOfContact/gmd:CI_ResponsibleParty" />
             
             <xsl:element name="mmd:geographic_extent">
                 <xsl:apply-templates select="gmd:identificationInfo/gmd:MD_DataIdentification/gmd:extent/gmd:EX_Extent/gmd:geographicElement/gmd:EX_GeographicBoundingBox" />
@@ -55,7 +55,9 @@
             </xsl:element>
             
             <xsl:apply-templates select="gmd:distributionInfo/gmd:MD_Distribution/gmd:distributor/gmd:MD_Distributor" />
+            <!--- FIXME merged with next during testing...
             <xsl:apply-templates select="gmd:distributionInfo/gmd:MD_Distribution/gmd:transferOptions/gmd:MD_DigitalTransferOptions/gmd:onLine" />
+            -->
             <xsl:apply-templates select="gmd:identificationInfo/srv:SV_ServiceIdentification/srv:containsOperations/srv:SV_OperationMetadata/srv:connectPoint" />
 
             <xsl:apply-templates select="gmd:dataSetURI/gco:CharacterString" />
@@ -90,14 +92,25 @@
 
     <xsl:template match="gmd:dateStamp">
         <xsl:element name="mmd:last_metadata_update">
-        <xsl:choose>
-            <xsl:when test="gco:DateTime">
-                <xsl:value-of select="gco:DateTime" />
-            </xsl:when>
-            <xsl:otherwise>
-                <xsl:value-of select="gco:Date" />
-            </xsl:otherwise>
-        </xsl:choose>
+            <xsl:element name="mmd:update">
+                <xsl:element name="mmd:datetime">
+                    <xsl:choose>
+                        <xsl:when test="gco:DateTime">
+                            <xsl:value-of select="gco:DateTime" />
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <xsl:value-of select="gco:Date" />
+                            <xsl:text>T00:00:00.001Z</xsl:text>
+                        </xsl:otherwise>
+                    </xsl:choose>
+                </xsl:element>
+                <xsl:element name="mmd:type">
+                    <xsl:text>Minor modification</xsl:text>
+                </xsl:element>
+                <xsl:element name="mmd:note">
+                    <xsl:text>Created automatically from harvested information.</xsl:text>
+                </xsl:element>
+            </xsl:element>
         </xsl:element>
 
         <!--
@@ -192,14 +205,16 @@
     
     <xsl:template match="gmd:identificationInfo/gmd:MD_DataIdentification/gmd:resourceConstraints/gmd:MD_LegalConstraints/gmd:useLimitation">
         <xsl:element name="mmd:use_constraint">
-            <xsl:choose>
-                <xsl:when test="gmd:MD_RestrictionCode[@codeListValue='otherConstraints']">
-                    <xsl:value-of select="../gmd:otherConstraints/gco:CharacterString" />
-                </xsl:when>
-                <xsl:otherwise>
-                    <xsl:value-of select="gco:CharacterString" />
-                </xsl:otherwise>
-            </xsl:choose>        
+            <xsl:element name="mmd:license_text">
+                <xsl:choose>
+                    <xsl:when test="gmd:MD_RestrictionCode[@codeListValue='otherConstraints']">
+                        <xsl:value-of select="../gmd:otherConstraints/gco:CharacterString" />
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:value-of select="gco:CharacterString" />
+                    </xsl:otherwise>
+                </xsl:choose>        
+            </xsl:element>
         </xsl:element>
     </xsl:template>    
     
@@ -262,6 +277,47 @@
             
         </xsl:element>
     </xsl:template>
+
+    <!-- handling CNR data from GeoNetwork -->
+    <xsl:template match="gmd:identificationInfo/gmd:MD_DataIdentification/gmd:pointOfContact/gmd:CI_ResponsibleParty">
+        <xsl:element name="mmd:personnel">
+            <xsl:element name="mmd:role">
+                <xsl:text>Investigator</xsl:text>
+            </xsl:element>
+            <xsl:element name="mmd:name">
+                <xsl:value-of select="gmd:individualName/gco:CharacterString" />
+            </xsl:element>
+            <xsl:element name="mmd:organisation">
+                <xsl:value-of select="gmd:organisationName/gco:CharacterString" />
+            </xsl:element>
+            <xsl:element name="mmd:email">
+                <xsl:value-of select="gmd:contactInfo/gmd:CI_Contact/gmd:address/gmd:CI_Address/gmd:electronicMailAddress/gco:CharacterString" />
+            </xsl:element>
+            <xsl:element name="mmd:phone">
+                <xsl:value-of select="gmd:contactInfo/gmd:CI_Contact/gmd:phone/gmd:CI_Telephone/gmd:voice/gco:CharacterString" />
+            </xsl:element>
+            <xsl:element name="mmd:fax">
+                <xsl:value-of select="gmd:contactInfo/gmd:CI_Contact/gmd:phone/gmd:CI_Telephone/gmd:facsimile/gco:CharacterString" />
+            </xsl:element>
+            <xsl:element name="mmd:contact_address">
+                <xsl:element name="mmd:address">
+                    <xsl:value-of select="gmd:contactInfo/gmd:CI_Contact/gmd:address/gmd:CI_Address/gmd:deliveryPoint/gco:CharacterString" />
+                </xsl:element>
+                <xsl:element name="mmd:city">
+                    <xsl:value-of select="gmd:contactInfo/gmd:CI_Contact/gmd:address/gmd:CI_Address/gmd:city/gco:CharacterString" />
+                </xsl:element>
+                <xsl:element name="mmd:province_or_state">
+                    <xsl:value-of select="gmd:contactInfo/gmd:CI_Contact/gmd:address/gmd:CI_Address/gmd:administrativeArea/gco:CharacterString" />
+                </xsl:element>
+                <xsl:element name="mmd:postal_code">
+                    <xsl:value-of select="gmd:contactInfo/gmd:CI_Contact/gmd:address/gmd:CI_Address/gmd:postalCode/gco:CharacterString" />
+                </xsl:element>
+                <xsl:element name="mmd:country">
+                    <xsl:value-of select="gmd:contactInfo/gmd:CI_Contact/gmd:address/gmd:CI_Address/gmd:country/gco:CharacterString" />
+                </xsl:element>            
+            </xsl:element>            
+        </xsl:element>
+    </xsl:template>
     
     <!-- get data access from NILU -->
     <xsl:template match="gmd:identificationInfo/srv:SV_ServiceIdentification/srv:containsOperations/srv:SV_OperationMetadata/srv:connectPoint">
@@ -301,34 +357,10 @@
     <mapping:protocol_names external="OPeNDAP:OPeNDAP" mmd="OPeNDAP" />
     <mapping:protocol_names external="file" mmd="HTTP" />
     <mapping:protocol_names external="OGC:WFS" mmd="OGC WFS" />
+    <mapping:protocol_names external="OGC:GML" mmd="OGC GML" />
     <mapping:protocol_names external="WWW:DOWNLOAD-1.0-http--download" mmd="HTTP" />
     <mapping:protocol_names external="csv" mmd="HTTP" />
-
-    <xsl:template match="gmd:distributionInfo/gmd:MD_Distribution/gmd:transferOptions/gmd:MD_DigitalTransferOptions/gmd:onLine">
-        <!-- need some hacks here to handle WGMS data, will also need to
-             translate protocol identifications -->
-
-        <xsl:element name="mmd:data_access">
-            <xsl:element name="mmd:type">
-                <xsl:variable name="external_name" select="normalize-space(gmd:CI_OnlineResource/gmd:protocol/gco:CharacterString)" />
-                <xsl:variable name="protocol_mapping" select="document('')/*/mapping:protocol_names[@external=$external_name]" />
-                <xsl:value-of select="$protocol_mapping" />
-                <xsl:value-of select="$protocol_mapping/@mmd"></xsl:value-of> 
-                <!--
-                <xsl:value-of select="gmd:CI_OnlineResource/gmd:protocol/gco:CharacterString" />
-                -->
-            </xsl:element>
-            <!--xsl:element name="mmd:name">
-                <xsl:value-of select="gmd:CI_OnlineResource/gmd:name/gco:CharacterString" />
-            </xsl:element-->
-            <xsl:element name="mmd:resource">
-                <xsl:value-of select="gmd:CI_OnlineResource/gmd:linkage/gmd:URL" />
-            </xsl:element>                        
-            <xsl:element name="mmd:description">
-                <xsl:value-of select="gmd:CI_OnlineResource/gmd:description/gco:CharacterString" />
-            </xsl:element>                                    
-        </xsl:element>
-    </xsl:template>
+    <mapping:protocol_names external="graph" mmd="HTTP" />
 
     <xsl:template match="gmd:dataSetURI/gco:CharacterString">
         <xsl:element name="mmd:related_information">
@@ -350,17 +382,93 @@
             </xsl:element>
         </xsl:if>
         -->
-        <xsl:if test="gmd:function/gmd:CI_OnLineFunctionCode/@codeListValue='information' and gmd:description/gco:CharacterString='Extended human readable information about the dataset'">
-            <xsl:element name="mmd:related_information">
-                <xsl:element name="mmd:type">Dataset landing page</xsl:element>
-                <xsl:element name="mmd:description">
-                    <xsl:value-of select="gmd:description/gco:CharacterString"/>
+        <!-- mapping vocabulary for URLs -->
+
+        <xsl:choose>
+            <!-- Decode landing pages for those data centres putting it here -->
+            <xsl:when test="gmd:function/gmd:CI_OnLineFunctionCode/@codeListValue='information' and gmd:description/gco:CharacterString='Extended human readable information about the dataset'">
+                <xsl:element name="mmd:related_information">
+                    <xsl:element name="mmd:type">Dataset landing page</xsl:element>
+                    <xsl:element name="mmd:description">
+                        <xsl:value-of select="gmd:description/gco:CharacterString"/>
+                    </xsl:element>
+                    <xsl:element name="mmd:resource">
+                        <xsl:value-of select="gmd:linkage/gmd:URL"/>
+                    </xsl:element>
                 </xsl:element>
-                <xsl:element name="mmd:resource">
-                    <xsl:value-of select="gmd:linkage/gmd:URL"/>
+            </xsl:when>
+            <!-- For handling of data from GeoNetwork, e.g. from CNR -->
+            <xsl:when test="gmd:name/gco:CharacterString='Landing page'">
+                <xsl:element name="mmd:related_information">
+                    <xsl:element name="mmd:type">Dataset landing page</xsl:element>
+                    <xsl:element name="mmd:description">
+                        <xsl:value-of select="gmd:description/gco:CharacterString"/>
+                    </xsl:element>
+                    <xsl:element name="mmd:resource">
+                        <xsl:value-of select="gmd:linkage/gmd:URL"/>
+                    </xsl:element>
                 </xsl:element>
-            </xsl:element>
-        </xsl:if>
+            </xsl:when>
+            <xsl:when test="gmd:name/gco:CharacterString='Project on RiS'">
+                <xsl:element name="mmd:related_information">
+                    <xsl:element name="mmd:type">Other documentation</xsl:element>
+                    <xsl:element name="mmd:description">
+                        <xsl:value-of select="gmd:description/gco:CharacterString"/>
+                    </xsl:element>
+                    <xsl:element name="mmd:resource">
+                        <xsl:value-of select="gmd:linkage/gmd:URL"/>
+                    </xsl:element>
+                </xsl:element>
+            </xsl:when>
+            <!-- For handling of WGMS data they mix this and have no good keyword, the project home page is identified using a string -->
+            <xsl:when test="gmd:name/gco:CharacterString='Homepage'">
+                <xsl:element name="mmd:related_information">
+                    <xsl:element name="mmd:type">Project home page</xsl:element>
+                    <xsl:element name="mmd:description">
+                        <xsl:value-of select="gmd:description/gco:CharacterString"/>
+                    </xsl:element>
+                    <xsl:element name="mmd:resource">
+                        <xsl:value-of select="gmd:linkage/gmd:URL"/>
+                    </xsl:element>
+                </xsl:element>
+            </xsl:when>
+
+            <!-- Decode data_access for those data centres putting it here (most) the download function from gmxCodelists.xml (ISO19139) can't be used as direct download... -->
+            <xsl:when test="gmd:protocol/gco:CharacterString and gmd:linkage/gmd:URL">
+                <xsl:variable name="external_name" select="normalize-space(gmd:protocol/gco:CharacterString)" />
+                <xsl:variable name="protocol_mapping" select="document('')/*/mapping:protocol_names[@external=$external_name]" />
+                <xsl:element name="mmd:data_access">
+                    <xsl:element name="mmd:type">
+                        <xsl:value-of select="$protocol_mapping" />
+                        <xsl:value-of select="$protocol_mapping/@mmd" /> 
+                    </xsl:element>
+                    <xsl:element name="mmd:description">
+                        <xsl:value-of select="gmd:description/gco:CharacterString"/>
+                    </xsl:element>
+                    <xsl:element name="mmd:resource">
+                        <xsl:value-of select="gmd:linkage/gmd:URL"/>
+                    </xsl:element>
+                </xsl:element>
+            </xsl:when>
+            <xsl:when test="gmd:function/gmd:CI_OnLineFunctionCode and gmd:linkage/gmd:URL">
+                <xsl:if test="not(gmd:function/gmd:CI_OnLineFunctionCode/@codeListValue='download') and not(gmd:function/gmd:CI_OnLineFunctionCode/@codeListValue='information')">
+                    <xsl:variable name="external_name" select="normalize-space(gmd:function/gmd:CI_OnLineFunctionCode)" />
+                    <xsl:variable name="protocol_mapping" select="document('')/*/mapping:protocol_names[@external=$external_name]" />
+                    <xsl:element name="mmd:data_access">
+                        <xsl:element name="mmd:type">
+                            <xsl:value-of select="$protocol_mapping" />
+                            <xsl:value-of select="$protocol_mapping/@mmd" /> 
+                        </xsl:element>
+                        <xsl:element name="mmd:description">
+                            <xsl:value-of select="gmd:description/gco:CharacterString"/>
+                        </xsl:element>
+                        <xsl:element name="mmd:resource">
+                            <xsl:value-of select="gmd:linkage/gmd:URL"/>
+                        </xsl:element>
+                    </xsl:element>
+                </xsl:if>
+            </xsl:when>
+        </xsl:choose>
     </xsl:template>
     
     <xsl:template match="gmd:identificationInfo/gmd:MD_DataIdentification/gmd:descriptiveKeywords/gmd:MD_Keywords/gmd:keyword/gco:CharacterString[contains(.,'EARTH SCIENCE &gt;')]">

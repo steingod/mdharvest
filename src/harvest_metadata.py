@@ -31,6 +31,7 @@ COMMENTS (for further development):
 
 import urllib.request as ul
 from urllib.parse import urlencode, quote_plus
+import ssl
 from xml.dom.minidom import parseString # To be removed
 import codecs
 import sys
@@ -134,7 +135,7 @@ class MetadataHarvester(object):
                 else:
                     raise "Metadata format not supported yet."
             else:
-                self.logger.error("Server is not responding properly")
+                self.logger.error("Server is not responding properly: %s", myxml)
                 raise IOError("Server to harvest is not responding properly")
                 return(0)
             pageCounter = 1
@@ -467,14 +468,15 @@ class MetadataHarvester(object):
         return
 
     def harvestContent(self,URL,credentials=False,uname="foo",pw="bar"):
+        ssl._create_default_https_context = ssl._create_unverified_context        
         """ Function for harvesting content from URL."""
         try:
             if not credentials:
                 # Timeout depends on user, 60 seconds is too little for
-                # NSIDC
-                myreq = ul.Request(URL)
+                # NSIDC and NPOLAR, increasing to 5 minutes
+                ##myreq = ul.Request(URL)
                 try:
-                    with ul.urlopen(myreq,timeout=60) as response:
+                    with ul.urlopen(URL,timeout=300) as response:
                         ##print('>>>>', response.getheader('Content-Type'))
                         # This is a bit awkward, but in order to improve robustness, multiple checks are required. Could be simplified, but not necessarily more readable.
                         if response.getheader('Content-Type') is None:
@@ -514,7 +516,7 @@ class MetadataHarvester(object):
         """ Function for handling resumptionToken in OAI-PMH"""
         #print "Now in resumptionToken..."
         try:
-            file = ul.request.urlopen(URL, timeout=60)
+            file = ul.request.urlopen(URL, timeout=300)
             data = file.read()
             file.close()
             dom = parseString(data)
