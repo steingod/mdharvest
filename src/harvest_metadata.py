@@ -184,14 +184,14 @@ class MetadataHarvester(object):
             start_time = datetime.now()
             dom = self.harvestContent(getRecordsURL)
             if dom == None:
-                self.logger.error("Server is not responding properly")
-                raise IOError("Server to harvest is not responding properly")
-                return(0)
+                self.logger.error("Server is not responding properly, skipping this provider...")
+                #raise IOError("Server to harvest is not responding properly")
+                return
             cswHeader = dom.find('csw:SearchResults',
                     namespaces={'csw':'http://www.opengis.net/cat/csw/2.0.2'})
             if cswHeader == None:
-                self.logger.error("Could not parse header response")
-                sys.exit(2)
+                self.logger.error("Could not parse header response, skipping this provider...")
+                return
             numRecsFound = int(cswHeader.get("numberOfRecordsMatched"))
             nextRec =  int(cswHeader.get('nextRecord'))
             self.numRecsReturned = int(cswHeader.get('numberOfRecordsReturned'))

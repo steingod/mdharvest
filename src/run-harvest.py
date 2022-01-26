@@ -139,7 +139,7 @@ def main(argv):
             numRec = mh.harvest()
         except Exception as e:
             mylog.warning("Something went wrong on harvest from "+section)
-            mylog.warning(str(e))
+            mylog.warning("Exception message: " + str(e))
         mylog.info("Number of records harvested "+section+': '+str(numRec))
 
     sys.exit(0)
