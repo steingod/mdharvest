@@ -195,7 +195,7 @@ class MetadataHarvester(object):
             numRecsFound = int(cswHeader.get("numberOfRecordsMatched"))
             nextRec =  int(cswHeader.get('nextRecord'))
             self.numRecsReturned = int(cswHeader.get('numberOfRecordsReturned'))
-            print('>>>',numRecsFound,nextRec, self.numRecsReturned)
+            #print('>>>',numRecsFound,nextRec, self.numRecsReturned)
             if dom != None:
                 self.ogccsw_writeCSWISOtoFile(dom)
             if nextRec > 0:
