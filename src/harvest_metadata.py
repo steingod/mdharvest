@@ -486,6 +486,7 @@ class MetadataHarvester(object):
                             myencoding = response.getheader('Content-Type').split('=',1)[1] 
                         else:
                             self.logger.warn('No Content-Type received from the server. Not sure why we ended up here.')
+                            self.logger.warn('Header received: %s', response.getheader('Content-Type'))
                             myencoding = 'UTF-8'
                         #myfile = bytes(response.read())
                         myfile = response.read()
