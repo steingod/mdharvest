@@ -85,7 +85,7 @@ def main(argv):
         if args.sources:
             if section not in mysources:
                 continue
-        mylog.info('Checking: '+section)
+        mylog.info('\n\n====\nChecking: '+section)
         if cfg[section]['protocol'] == 'OAI-PMH':
             if cfg[section]['set']:
                 if args.fromTime:
