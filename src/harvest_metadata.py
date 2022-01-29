@@ -95,7 +95,7 @@ class MetadataHarvester(object):
     """ 
     Creates metadata-harvester object with methods for harvesting and writing
     """
-    def __init__(self, logname, baseURL, records, outputDir, hProtocol, 
+    def __init__(self, logname, baseURL, records, outputDir, mmdDir, hProtocol, 
             srcfmt = None, username=None, pw=None):
         """ set variables in class """
         self.logger = logging.getLogger('.'.join([logname,'MetadataHarvester']))
@@ -103,6 +103,7 @@ class MetadataHarvester(object):
         self.baseURL = baseURL
         self.records = records
         self.outputDir = outputDir
+        self.mmdDir = mmdDir
         self.hProtocol = hProtocol
         self.srcfmt = srcfmt
         self.username = username
@@ -132,6 +133,9 @@ class MetadataHarvester(object):
                     self.oaipmh_writeDIFtoFile(myxml)
                 elif "iso" in self.srcfmt:
                     self.oaipmh_writeISOtoFile(myxml)
+                elif "rdf" in self.srcfmt:
+                    # Probably should discuss keyword, rdf is quite wide...
+                    self.oaipmh_writeDCATtoFile(myxml)
                 else:
                     raise "Metadata format not supported yet."
             else:
@@ -357,13 +361,17 @@ class MetadataHarvester(object):
                 # Challenges arise when oaiid and isoid are different as
                 # isoid is used as the filename...
                 if delete_status != None:
-                    self.logger.warn("This record has been deleted:\n\t%s",oaiid)
+                    # TODO: Fix MMD records if record is deleted...
+                    self.logger.info("This record has been deleted:\n\t%s",oaiid)
+                    # Extract identifier. These ID appears like oai:<endpoint>:<id>, need to extract the last part, but keep in mind some data centres use : in identifiers.
+                    mmdid = oaiid.split(':',3)[2]
+                    # Update MMD record, i.e. set Inactive if existing
+                    self.updateMMD(mmdid)
                 isoid = record.find('oai:metadata/gmi:MI_Metadata/gmd:fileIdentifier/gco:CharacterString',
                         namespaces=myns)
                 if isoid == None:
                     isoid = record.find('oai:metadata/gmd:MD_Metadata/gmd:fileIdentifier/gco:CharacterString',
                             namespaces=myns)
-                    #print('Here I am',isoid)
                 if isoid == None:
                     self.logger.warn("Skipping record, no ISO ID")
                     continue
@@ -405,7 +413,8 @@ class MetadataHarvester(object):
         if size_dif != 0:
             for record in record_elements:
                 # Check header if deleted
-                #print ET.tostring(record)
+                #print(ET.tostring(record))
+                #sys.exit(0)
                 datestamp = record.find('oai:header/oai:datestamp',
                         namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
                 if datestamp != None:
@@ -419,7 +428,12 @@ class MetadataHarvester(object):
                 # Cahallenges arise when oaiid and difid are different as
                 # difid is used as the filename...
                 if delete_status != None:
-                    self.logger.warn("\n\tThis record has been deleted: %s",oaiid)
+                    # TODO: Fix MMD records if record is deleted...
+                    self.logger.info("This record has been deleted:\n\t%s",oaiid)
+                    # Extract identifier. These ID appears like oai:<endpoint>:<id>, need to extract the last part, but keep in mind some data centres use : in identifiers.
+                    mmdid = oaiid.split(':',3)[2]
+                    # Update MMD record, i.e. set Inactive if existing
+                    self.updateMMD(mmdid)
                 difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID',
                         namespaces=myns)
                 if difid == None:
@@ -437,6 +451,13 @@ class MetadataHarvester(object):
 
         self.logger.info("\n\tNumber of records written to files: %d", counter)
         self.numRecHarv += counter
+        return
+
+    def oaipmh_writeDCATtoFile(self,dom):
+        """ 
+        Write DCAT elements in dom to file 
+        """
+        self.logger.warning('Not implemented yet')
         return
 
     def write_to_file(self, record, myid):
@@ -465,6 +486,35 @@ class MetadataHarvester(object):
             self.logger.error("Could not create output file: %s", filename)
             raise
             sys.exit(2)
+        return
+
+    def updateMMD(self, mmdid):
+
+        self.logger.info('Now in updateMMD')
+        
+        # Create filename from id
+        mmdfile = '/'.join([self.mmdDir, mmdid.replace('.','_')+'.xml'])
+
+        # Check if file exists
+        if os.path.exists(mmdfile):
+            self.logger.info('Found file: %s', mmdfile)
+            print("====================================================")
+            try:
+                myxml = ET.parse(mmdfile)
+            except Exception as e:
+                self.logger.warn('Could not properly parse: %s', mmdfile)
+            myroot = myxml.getroot()
+            mystat = myroot.find('mmd:metadata_status', namespaces=myroot.nsmap)
+            if mystat is None:
+                self.logger.info('Nothing to do in %s, no status provided', mmdfile)
+                return
+            if mystat.text == 'Active':
+                mystat.text = 'Inactive'
+            myxml.write(mmdfile, pretty_print=True)
+            sys.exit(0)
+        else:
+            self.logger.info('No existing file found, probably already deleted.')
+
         return
 
     def harvestContent(self,URL,credentials=False,uname="foo",pw="bar"):

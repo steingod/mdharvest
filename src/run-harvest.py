@@ -132,7 +132,7 @@ def main(argv):
             mylog.warn("Protocol not supported yet")
         numRec = 0
         mh = MetadataHarvester('run-harvest', cfg[section]['source'],
-                request,cfg[section]['raw'],
+                request,cfg[section]['raw'],cfg[section]['mmd'],
                 cfg[section]['protocol'],
                 cfg[section]['mdkw'])
         try: 
