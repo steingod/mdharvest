@@ -91,6 +91,35 @@ def check_directories(cfg):
                    return(2)
     return(0)
 
+def setInactive(mmdDir, mmdid):
+
+    self.logger.info('Now in setInactive')
+    
+    # Create filename from id
+    mmdfile = '/'.join([mmdDir, mmdid.replace('.','_')+'.xml'])
+
+    # Check if file exists
+    if os.path.exists(mmdfile):
+        self.logger.info('Found file: %s', mmdfile)
+        print("====================================================")
+        try:
+            myxml = ET.parse(mmdfile)
+        except Exception as e:
+            self.logger.warn('Could not properly parse: %s', mmdfile)
+        myroot = myxml.getroot()
+        mystat = myroot.find('mmd:metadata_status', namespaces=myroot.nsmap)
+        if mystat is None:
+            self.logger.info('Nothing to do in %s, no status provided', mmdfile)
+            return
+        if mystat.text == 'Active':
+            mystat.text = 'Inactive'
+        myxml.write(mmdfile, pretty_print=True)
+        sys.exit(0)
+    else:
+        self.logger.info('No existing file found, probably already deleted.')
+
+    return
+
 class MetadataHarvester(object):
     """ 
     Creates metadata-harvester object with methods for harvesting and writing
@@ -366,7 +395,7 @@ class MetadataHarvester(object):
                     # Extract identifier. These ID appears like oai:<endpoint>:<id>, need to extract the last part, but keep in mind some data centres use : in identifiers.
                     mmdid = oaiid.split(':',3)[2]
                     # Update MMD record, i.e. set Inactive if existing
-                    self.updateMMD(mmdid)
+                    setInactive(self.mmdDir,mmdid)
                 isoid = record.find('oai:metadata/gmi:MI_Metadata/gmd:fileIdentifier/gco:CharacterString',
                         namespaces=myns)
                 if isoid == None:
@@ -433,7 +462,7 @@ class MetadataHarvester(object):
                     # Extract identifier. These ID appears like oai:<endpoint>:<id>, need to extract the last part, but keep in mind some data centres use : in identifiers.
                     mmdid = oaiid.split(':',3)[2]
                     # Update MMD record, i.e. set Inactive if existing
-                    self.updateMMD(mmdid)
+                    setInactive(self.mmdDir, mmdid)
                 difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID',
                         namespaces=myns)
                 if difid == None:
@@ -488,34 +517,6 @@ class MetadataHarvester(object):
             sys.exit(2)
         return
 
-    def updateMMD(self, mmdid):
-
-        self.logger.info('Now in updateMMD')
-        
-        # Create filename from id
-        mmdfile = '/'.join([self.mmdDir, mmdid.replace('.','_')+'.xml'])
-
-        # Check if file exists
-        if os.path.exists(mmdfile):
-            self.logger.info('Found file: %s', mmdfile)
-            print("====================================================")
-            try:
-                myxml = ET.parse(mmdfile)
-            except Exception as e:
-                self.logger.warn('Could not properly parse: %s', mmdfile)
-            myroot = myxml.getroot()
-            mystat = myroot.find('mmd:metadata_status', namespaces=myroot.nsmap)
-            if mystat is None:
-                self.logger.info('Nothing to do in %s, no status provided', mmdfile)
-                return
-            if mystat.text == 'Active':
-                mystat.text = 'Inactive'
-            myxml.write(mmdfile, pretty_print=True)
-            sys.exit(0)
-        else:
-            self.logger.info('No existing file found, probably already deleted.')
-
-        return
 
     def harvestContent(self,URL,credentials=False,uname="foo",pw="bar"):
         ssl._create_default_https_context = ssl._create_unverified_context        
