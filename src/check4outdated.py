@@ -31,7 +31,7 @@ def parse_arguments():
     
     parser.add_argument("-c","--config",dest="cfgfile", help="Configuration file containing endpoints to harvest", required=True)
     parser.add_argument("-l","--logfile",dest="logfile", help="Log file", required=True)
-    parser.add_argument("-f","--from",dest="fromTime", help="DateTime to check agains, in the form YYYY-MM-DD, older files are set inactive", required=False)
+    parser.add_argument("-f","--from",dest="fromTime", help="DateTime to check against, in the form YYYY-MM-DD, older files are set inactive", required=False)
     parser.add_argument('-s','--sources',dest='sources',help='Comma separated list of sources (in config) to harvest',required=False)
 
     args = parser.parse_args()
@@ -48,16 +48,18 @@ def parse_arguments():
 
     return args
 
-def loop_directory(mylog, dir2c, dir2m):
-    mylog.info('Checking files')
+def loop_directory(mylog, dir2c, dir2m, olderthan=None):
+    mylog.info('Checking files in %s', dir2c)
     # Set default outdated time, should be one week
     defoutdtime = 60*60*24*7
+    if olderthan is None:
+        olderthan = datetime.now().timestamp()-defoutdtime
     for fn in os.listdir(dir2c):
         if fn.endswith('.xml'):
-            lastmtime = os.path.getmtime('/'.join([dir2c,fn]))
             # Check against minimum check
             # TODO: Make configureable and add check from command line
-            if lastmtime < (time.time()-defoutdtime):
+            lastmtime = os.path.getmtime('/'.join([dir2c,fn]))
+            if lastmtime < olderthan:
                 mmdid = fn.rstrip('.xml')
                 mylog.info("File %s will be set inactive", fn)
                 setInactive(dir2m, mmdid, mylog)
@@ -74,6 +76,11 @@ def main(argv):
 
     if args.sources:
         mysources = args.sources.split(',')
+
+    if args.fromTime:
+        olderthan = datetime.strptime(args.fromTime,'%Y-%m-%d').timestamp()
+    else:
+        olderthan = None
 
     # Set up logging
     print(args.logfile)
@@ -94,7 +101,7 @@ def main(argv):
         mylog.info('====')
         mylog.info('Checking: %s for old files',section)
         mylog.info('Looping harvested files in: %s', cfg[section]['raw'])
-        loop_directory(mylog, cfg[section]['raw'],cfg[section]['mmd'])
+        loop_directory(mylog, cfg[section]['raw'],cfg[section]['mmd'], olderthan)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
