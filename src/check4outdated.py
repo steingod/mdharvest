@@ -20,10 +20,11 @@ import sys
 import os
 import argparse
 import yaml
-from harvest_metadata import *
+from harvest_metadata import setInactive,initialise_logger
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
+import time
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -49,13 +50,18 @@ def parse_arguments():
 
 def loop_directory(mylog, dir2c, dir2m):
     mylog.info('Checking files')
+    # Set default outdated time, should be one week
+    defoutdtime = 60*60*24*7
     for fn in os.listdir(dir2c):
         if fn.endswith('.xml'):
-            print(fn)
-
-    return
-
-def check_file_age():
+            lastmtime = os.path.getmtime('/'.join([dir2c,fn]))
+            print(fn, datetime.fromtimestamp(lastmtime).strftime("%Y-%m-%dT%H:%M:%S"))
+            # Check against minimum check
+            # TODO: Make configureable and add check from command line
+            if lastmtime < (time.time()-defoutdtime):
+                mmdid = fn.rstrip('.xml')
+                print("Need to remove this file!!!", mmdid)
+                setInactive(dir2m, mmdid, mylog)
 
     return
 
