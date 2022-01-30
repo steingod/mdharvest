@@ -24,7 +24,6 @@ from harvest_metadata import setInactive,initialise_logger
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
-import time
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
