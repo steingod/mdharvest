@@ -93,15 +93,12 @@ def check_directories(cfg):
 
 def setInactive(mmdDir, mmdid, mylog):
 
-    mylog.info('Now in setInactive')
-    
     # Create filename from id
     mmdfile = '/'.join([mmdDir, mmdid.replace('.','_')+'.xml'])
 
     # Check if file exists
     if os.path.exists(mmdfile):
         mylog.info('Found file: %s', mmdfile)
-        print("====================================================")
         try:
             myxml = ET.parse(mmdfile)
         except Exception as e:
@@ -113,7 +110,8 @@ def setInactive(mmdDir, mmdid, mylog):
             return
         if mystat.text == 'Active':
             mystat.text = 'Inactive'
-        myxml.write(mmdfile, pretty_print=True)
+            mylog.info('%s is set inactive', mmdfile)
+            myxml.write(mmdfile, pretty_print=True)
     else:
         mylog.info('No existing file found, probably already deleted.')
 
