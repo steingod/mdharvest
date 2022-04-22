@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+#
+# Name:
+# traverse_thredds
+#
+# Purpose:
+# Traverse THREDDS catalogs and extract discovery metadata into MMD files
+# for datasets having ACDD elements.
+# 
+# Author:
+# Øystein Godøy, METNO/FOU, 2020-10-06, original version
+#
+import sys
+import os
+import argparse
+import threddsclient
+from mdh_modules.nc_to_mmd import Nc_to_mmd
+import lxml.etree as ET
+from datetime import datetime
+import pytz
+import uuid
+
+def traverse_thredds(mystart, dstdir, mydepth):
+    print('Traversing:', mystart, 'to depth', mydepth)
+    #mystart = 'https://thredds.met.no/thredds/arcticdata/arcticdata.xml'
+    #print(mystart)
+    ns_map = {'mmd': "http://www.met.no/schema/mmd",
+                  'gml': "http://www.opengis.net/gml"}
+    if '?' in mystart:
+        mydir = mystart.split('?')[0].replace('catalog.html','')
+    else:
+        mydir = mystart.replace('catalog.html','')
+    print('>>>', mystart)
+    for ds in threddsclient.crawl(mystart, depth=mydepth):
+        print('Processing:\n\t', ds.name,sep='')
+        #print('\tLanding page:',ds.url,sep='\n\t\t')
+        #print('\tDownload URL:', ds.download_url(),sep='\n\t\t')
+        #print('\tOPeNDAP URL:', ds.opendap_url(),sep='\n\t\t')
+        #print('\tOGC WMS URL:', ds.wms_url(),sep='\n\t\t')
+        #mypath = ds.url.replace(mystart.replace('catalog.html',''),'').split('?')[0]
+        if 'catalog.xml' in ds.url:
+            mypath = (ds.url.split('?')[0].replace('catalog.xml','')).replace(mydir,'')
+        else:
+            mypath = (ds.url.split('?')[-1])
+        newdstdir = os.path.join(dstdir,mypath)
+        # Make more robust...
+        if not os.path.exists(newdstdir):
+            os.makedirs(newdstdir)
+        infile = ds.opendap_url()
+        outfile = os.path.splitext(ds.name)[0]+'.xml'
+        try:
+            md = Nc_to_mmd(dstdir, outfile, infile, False, False, False)
+        except Exception as e:
+            print('Something failed setting up ACDD extraction', e)
+            continue
+        try:
+            myxml = md.to_mmd()
+        except Exception as e:
+            print('Something failed when extracting MMD elements', e)
+            continue
+
+        if myxml is None:
+            continue
+        # Modify the XML generated with information from THREDDS
+        #print('Parsing XML')
+        #myxml = ET.parse(os.path.join(dstdir,outfile))
+        myroot = myxml.getroot()
+        # Check and potentially modify identifier
+        mynode = myxml.find("./mmd:metadata_identifier", myroot.nsmap)
+        #print(mynode.text, ds.url.replace('catalog.xml?dataset=',''))
+        # If ID is not a UUID, replace with a newly generated UUID
+        # Check if UUID is prefixed by namespace
+        if mynode is not None:
+            try:
+                uuidver = uuid.UUID(mynode.text).version
+            except ValueError:
+                print("\tNot containing a straight UUID, checks further.")
+                # Checking if containing UUID with namespace
+                if any((c in set('.:')) for c in mynode.text):
+                    if ':' in mynode.text:
+                        mystr = mynode.text.split(':')[-1]
+                        try:
+                            uuidver = uuid.UUID(mystr).version
+                        except ValueError:
+                            print('\tDoes not recognise %s as a valid identifier', mystr)
+                            try:
+                                mynode.text = str(uuid.uuid5(uuid.NAMESPACE_URL,
+                                    ds.url.replace('catalog.xml?dataset=','')))
+                            except TypeError as e:
+                                print(e)
+                        print('\tContains identifier with namespace prefixed UUID')
+                    elif '.' in mynode.text:
+                        mystr = mynode.text.split('.')[-1]
+                        print('\tThis type of identifier is not properly supported yet')
+                        sys.exit()
+                else:
+                    try:
+                        mynode.text = str(uuid.uuid5(uuid.NAMESPACE_URL,
+                            ds.url.replace('catalog.xml?dataset=','')))
+                    except TypeError as e:
+                        print(e)
+        else:
+            try:
+                mynode = ET.Element("{http://www.met.no/schema/mmd}metadata_identifier")
+                mynode.text = str(uuid.uuid5(uuid.NAMESPACE_URL,
+                    ds.url.replace('catalog.xml?dataset=','')))
+            except TypeError as e:
+                print(e)
+            try:
+                myroot.insert(0, mynode)
+            except Exception as e:
+                print(e)
+
+        # Add metadata_status
+        # Already done, removing
+        #mynode = ET.Element("{http://www.met.no/schema/mmd}metadata_status")
+        #mynode.text = 'Active'
+        #myroot.insert(4, mynode)
+
+        # Add and update last_metdata_update
+        # Removed for now since covered by nc_to_mmd
+##        mynode = ET.Element("{http://www.met.no/schema/mmd}last_metadata_update")
+##        mychild = ET.SubElement(mynode,"{http://www.met.no/schema/mmd}update")
+##        mygchild1 = ET.SubElement(mychild,"{http://www.met.no/schema/mmd}datetime")
+##        mygchild1.text = datetime.now(tz=pytz.UTC).strftime('%Y-%m-%dT%H:%M:%S%Z')
+##        mygchild2 = ET.SubElement(mychild,"{http://www.met.no/schema/mmd}type")
+##        mygchild2.text = 'Created'
+##        mygchild3 = ET.SubElement(mychild,"{http://www.met.no/schema/mmd}note")
+##        mygchild3.text = 'Created automatically from traversing THREDDS server'
+##        myroot.insert(5,mynode)
+
+        # Add collection
+        mynode = ET.Element("{http://www.met.no/schema/mmd}collection")
+        mynode.text = 'ADC'
+        myroot.insert(6,mynode)
+        mynode = ET.Element("{http://www.met.no/schema/mmd}collection")
+        mynode.text = 'NSDN'
+        myroot.insert(7,mynode)
+
+        # Add iso_topic_category
+        # Most datasets belong to this, quick hack for now
+        mynode = ET.Element("{http://www.met.no/schema/mmd}iso_topic_category")
+        mynode.text = 'Not available'
+        myroot.insert(8, mynode)
+
+        # Check and potentially modify activity_type
+        mynode = myxml.find("./mmd:activity_type",namespaces=myroot.nsmap)
+        if mynode is not None:
+            mynode.text = 'Not available'
+        else:
+            mynode = ET.Element("{http://www.met.no/schema/mmd}activity_type")
+            mynode.text = 'Not available'
+        myroot.insert(9, mynode)
+
+        # Check and potentially modify operational_status
+        mynode = myxml.find("./mmd:operational_status",namespaces=myroot.nsmap)
+        if mynode is not None:
+            mynode.text = 'Not available'
+        else:
+            mynode = ET.Element("{http://www.met.no/schema/mmd}operational_status")
+            mynode.text = 'Not available'
+        myroot.insert(9, mynode)
+
+        # Add related_information
+        related_information = ET.Element(
+                "{http://www.met.no/schema/mmd}related_information")
+        related_information_resource = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}resource')
+        related_information_resource.text = ds.url.replace('xml','html')
+        related_information_type = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}type')
+        related_information_type.text = 'Dataset landing page'
+        related_information_description = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}description')
+        related_information_description.text = 'Dataset landing page'
+        myroot.insert(-1,related_information)
+
+        # Add data_access (not done automatically)
+        data_access = ET.Element(
+                '{http://www.met.no/schema/mmd}data_access')
+        data_access_resource = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}resource')
+        data_access_resource.text = ds.download_url()
+        data_access_type = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}type')
+        data_access_type.text = 'HTTP'
+        data_access_description = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}description')
+        data_access_description.text = 'Direct download of datafile'
+        myroot.insert(-1,data_access)
+
+        data_access = ET.Element(
+                '{http://www.met.no/schema/mmd}data_access')
+        data_access_resource = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}resource')
+        data_access_resource.text = ds.opendap_url()
+        data_access_type = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}type')
+        data_access_type.text = 'OPeNDAP'
+        data_access_description = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}description')
+        data_access_description.text = 'OPeNDAP access to dataset'
+        myroot.insert(-1,data_access)
+
+        data_access = ET.Element(
+                '{http://www.met.no/schema/mmd}data_access')
+        data_access_resource = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}resource')
+        data_access_resource.text = ds.wms_url()
+        data_access_type = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}type')
+        data_access_type.text = 'OGC WMS'
+        data_access_description = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}description')
+        data_access_description.text = 'OGC WMS GetCapabilities URL'
+        myroot.insert(-1,data_access)
+
+        # Reference should be removed
+        # dataset citation has to be further improved...
+
+        # Create new file
+        myxml.write(os.path.join(newdstdir,outfile), pretty_print=True)
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+            description='Traverse THREDDS catalogues and extract '+
+            'discovery metadata to MMD where ACDD elements are present')
+    parser.add_argument('starturl', type=str, 
+            help='URL to start traverse')
+    parser.add_argument('dstdir', type=str, 
+            help='Directory where to put MMD files')
+    parser.add_argument('-d', '--depth', type=int, default=3, 
+            help='Directory where to put MMD files')
+    try:
+        args = parser.parse_args()
+    except:
+        parser.print_help()
+        sys.exit()
+    
+    try:
+        traverse_thredds(args.starturl, args.dstdir, args.depth)
+    except Exception as e:
+        print('Something went wrong:', e)
+        sys.exit()
+    sys.exit()

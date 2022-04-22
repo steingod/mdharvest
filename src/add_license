@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+#
+# Name:
+# add_collection
+#
+# Purpose:
+# Add a collection keyword to a dataset.
+# 
+# Author:
+# Øystein Godøy, METNO/FOU, 2020-10-06, original version
+#
+import sys
+import os
+import argparse
+import textwrap
+import lxml.etree as ET
+from datetime import datetime
+import pytz
+import json
+
+if __name__ == '__main__':
+    mylicenses = {
+            'CC0-1.0':'https://spdx.org/licenses/CC0-1.0.html',
+            'CC-BY-4.0':'https://spdx.org/licenses/CC-BY-4.0.html',
+            'CC-BY-NC-4.0':'https://spdx.org/licenses/CC-BY-NC-4.0.html',
+            'CC-BY-NC-ND-4.0':'https://spdx.org/licenses/CC-BY-NC-ND-4.0.html',
+            'CC-BY-NC-SA-4.0':'https://spdx.org/licenses/CC-BY-NC-SA-4.0.html',
+            'CC-BY-SA-4.0':'https://spdx.org/licenses/CC-BY-SA-4.0.html',
+            'NLOD-1.0':'https://spdx.org/licenses/NLOD-1.0.html',
+            'NLOD-2.0':'https://spdx.org/licenses/NLOD-2.0.html',
+            }
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+            description='Add license to MMD records. '+
+            'Licenses come from SPX list. '+
+            'See https://spdx.org/licenses/ for details. '+
+            'For handling of multiple files run through find. ',
+            epilog='The licenses added so far are listed below: '+
+            textwrap.dedent(json.dumps(mylicenses)))
+    parser.add_argument('licenseid', type=str, 
+            help='Use SPDX license identifier (not all supported)')
+    parser.add_argument('infile', type=str, 
+            help='File to update')
+    parser.add_argument('-o','--overwrite', action='store_true', help='Overwrite existing license field.')
+    try:
+        args = parser.parse_args()
+    except:
+        parser.print_help()
+        sys.exit()
+
+    if args.licenseid not in mylicenses:
+        print('Can not find the key requested in the prefdefined list.')
+        sys.exit()
+
+    # Read input file
+    try:
+        myxml = ET.parse(args.infile)
+    except:
+        print("Couldn't parse input file", args.infile)
+        sys.exit()
+
+    myroot = myxml.getroot()
+
+    # Find existing elements
+    myel =  myroot.find("mmd:use_constraint", namespaces=myroot.nsmap)
+    if myel is None:
+        # Create default use_constraint
+        myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"use_constraint"),nsmap=myroot.nsmap)
+        ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'identifier')).text = 'CC-BY-4.0'
+        ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'resource')).text = 'http://spdx.org/licenses/CC-BY-4.0'
+        myroot.append(myp)
+    if myel is not None and args.overwrite:
+        # Delete the existing
+        myel.getparent().remove(myel)
+        myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"use_constraint"),nsmap=myroot.nsmap)
+        ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'identifier')).text = args.licenseid
+        ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'resource')).text = mylicenses[args.licenseid]
+        myroot.append(myp)
+    else:
+        print(ET.tostring(myel))
+        print('Already specified...')
+        sys.exit()
+
+    # Open up existing if restricted access
+    myel =  myroot.find("mmd:access_constraint", namespaces=myroot.nsmap)
+    if myel is not None:
+        if myel.text != 'Open':
+            print('Opening up access to dataset')
+            myel.text = 'Open'
+    else:
+        myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"access_constraint"),nsmap=myroot.nsmap)
+        myp.text = 'Open'
+
+        myroot.append(myp)
+
+    # Update last_metadata_update
+    myel =  myroot.find("mmd:last_metadata_update", namespaces=myroot.nsmap)
+    if myel is not None:
+        myp2 = ET.SubElement(myel,ET.QName(myroot.nsmap['mmd'],"update"),nsmap=myroot.nsmap)
+        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"datetime"),nsmap=myroot.nsmap).text = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ") 
+        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Major modification'
+        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"note"),nsmap=myroot.nsmap).text =  'Added license to dataset.'
+    else:
+        myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"last_metadata_update"),nsmap=myroot.nsmap)
+        myp2 = ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],"update"),nsmap=myroot.nsmap)
+        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"datetime"),nsmap=myroot.nsmap).text = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ") 
+        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Created'
+        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"note"),nsmap=myroot.nsmap).text =  'Added license to dataset.'
+
+        myroot.append(myp)
+
+    # Dump results to file
+    myxml.write(args.infile, pretty_print=True)

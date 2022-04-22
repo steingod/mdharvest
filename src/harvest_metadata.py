@@ -484,6 +484,52 @@ class MetadataHarvester(object):
         Write DCAT elements in dom to file 
         """
         self.logger.warning('Not implemented yet')
+        myns = {
+                'oai':'http://www.openarchives.org/OAI/2.0/',
+                'dcat':'http://www.w3.org/ns/dcat#'
+                }
+        record_elements =  dom.xpath('/oai:OAI-PMH/oai:ListRecords/oai:record', 
+                namespaces=myns)
+        self.logger.info("\n\tNumber of records found: %d",len(record_elements))
+        size_dif = len(record_elements)
+
+        counter = 0
+        if size_dif != 0:
+            for record in record_elements:
+                # Check header if deleted
+                # TODO: Check if used with DCAT
+                datestamp = record.find('oai:header/oai:datestamp',
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
+                if datestamp != None:
+                    datestamp = datestamp.text
+                oaiid = record.find('oai:header/oai:identifier',
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'}).text
+                delete_status = record.find("oai:header[@status='deleted']",
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
+                if delete_status != None:
+                    self.logger.info("This record has been deleted:\n\t%s",oaiid)
+                    # Extract identifier. These ID appears like oai:<endpoint>:<id>, need to extract the last part, but keep in mind some data centres use : in identifiers.
+                    mmdid = oaiid.split(':',3)[2]
+                    # Update MMD record, i.e. set Inactive if existing
+                    setInactive(self.mmdDir, mmdid, self.logger)
+                # Not sure how identifiers are handled in the stream we have access to so far.
+                #dcatid = record.find('oai:metadata/dif:DIF/dif:Entry_ID', namespaces=myns)
+                dcatid = oaiid
+                if dcatid == None:
+                    self.logger.warn("Skipping record, no DIF ID")
+                    continue
+                difid = difid.text
+                dcatrec = record.find('oai:metadata/rdf:RDF', namespaces=myns)
+                # TODO: Collect the linked information...
+
+                # Dump to file
+                counter += 1
+                self.write_to_file(difrec, difid)
+        else:
+            self.logger.info("\n\tRecords did not contain DIF elements")
+
+        self.logger.info("\n\tNumber of records written to files: %d", counter)
+        self.numRecHarv += counter
         return
 
     def write_to_file(self, record, myid):
