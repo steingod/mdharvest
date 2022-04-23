@@ -64,15 +64,12 @@ def traverse_listfile(mylist, dstdir, parse_services=False):
             continue
 
         # Modify the MMD file if necessary
-        myxml = modifyMMD(myxml, False, 'NSDN,SIOS', False)
-        print('So far so good...')
-        print(ET.tostring(myxml))
+        myxml = modifyMMD(myxml, False, 'NSDN,SIOS,SIOSCD', False)
 
         # Create new file
         print('Creating ', outfile)
         myxml.write(os.path.join(dstdir,outfile), pretty_print=True)
 
-# FIXME
 def modifyMMD(myxml, checkId=False, collections=None, thredds=False):
     # Modify the XML generated with information from THREDDS
     #print('Parsing XML')
