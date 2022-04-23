@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+import argparse
+import sys
+
+from mdh_modules.nc_to_mmd import main
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Extract ACDD elements and create MMD record')
+
+    parser.add_argument('input_file',
+                        type=str,
+                        default=None,
+                        help="Input file or OpeNDAP URL")
+    parser.add_argument('output_path',
+                        type=str,
+                        default=None,
+                        help="Output path for MMD files")
+    parser.add_argument('-s','--parse-services',
+                        action='store_true',
+                        help="If set enables parsing of services")
+    parser.add_argument('-w','--parse-wms-layers',
+                        action='store_true',
+                        help="If set enables parsing of wms_layers, requires parsing of services")
+    try:
+        args = parser.parse_args()
+    except:
+        parser.print_help()
+        sys.exit()
+
+    main(input_file=args.input_file, output_path=args.output_path,
+            parse_services=args.parse_services, parse_wmslayers=args.parse_wms_layers, print_file=True)
+

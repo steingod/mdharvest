@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+#
+# Name:
+# transformrecord
+#
+# Purpose:
+# Run selected XSLT on record. Supports both XSLT 1 and 2.
+# Allows overwriting records without creating copies.
+# 
+# Author:
+# Øystein Godøy, METNO/FOU, 2020-10-06, original version
+#
+import sys
+import os
+import argparse
+import lxml.etree as ET
+from datetime import datetime
+import pytz
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+            description='Run a XSLT transformation of records. '+
+            'For handling of multiple files run through find.')
+    parser.add_argument('xslt', type=str, 
+            help='XSLT')
+    parser.add_argument('infile', type=str, 
+            help='File to update')
+    parser.add_argument('-o', '--in-place', 
+            dest='overwrite', action='store_true', 
+            default=False, 
+            help='Overwrite original file')
+    try:
+        args = parser.parse_args()
+    except:
+        parser.print_help()
+        sys.exit()
+
+    # Read XSLT
+    try:
+        xsltdoc = ET.parse(args.xslt)
+    except Exception as e:
+        print('Failed to load XSLT', e)
+        sys.exit()
+    try:
+        transform = ET.XSLT(xsltdoc)
+    except:
+        print('Failed to create transform object')
+        sys.exit()
+
+    # Read input file
+    try:
+        myxml = ET.parse(args.infile)
+    except:
+        print("Couldn't parse input file", args.infile)
+        sys.exit()
+
+    # Do the transformation
+    try:
+        newdoc = transform(myxml)
+    except:
+        print('XSLT transformation failed on', args.infile)
+        sys.exit()
+
+    # Dump results to file
+    # Need to fully implement alternative to overwrite...
+    if args.overwrite:
+        newdoc.write(args.infile, pretty_print=True)
+    else:
+        print(ET.tostring(newdoc))

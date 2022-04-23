@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+#
+# Name:
+# add_collection
+#
+# Purpose:
+# Add a collection keyword to a dataset.
+# 
+# Author:
+# Øystein Godøy, METNO/FOU, 2020-10-06, original version
+#
+import sys
+import os
+import argparse
+import lxml.etree as ET
+from datetime import datetime
+import pytz
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+            description='Add collection element to MMD records. '+
+            'For handling of multiple files run through find.')
+    parser.add_argument('collection', type=str, 
+            help='comma separated list of collection keywords to add')
+    parser.add_argument('infile', type=str, 
+            help='File to update')
+    try:
+        args = parser.parse_args()
+    except:
+        parser.print_help()
+        sys.exit()
+
+    # Read input file
+    try:
+        myxml = ET.parse(args.infile)
+    except:
+        print("Couldn't parse input file", args.infile)
+        sys.exit()
+
+    myroot = myxml.getroot()
+
+    # Find existing collection keyword and position
+    mynode = myxml.find("./mmd:collection",namespaces=myroot.nsmap)
+    if mynode == None:
+        print('No collection found, not handling this now.')
+        sys.exit()
+    mynodes = myxml.findall("./mmd:collection",namespaces=myroot.nsmap)
+    for el in args.collection.split(','):
+        for cl in mynodes:
+            if el in cl.text:
+                print('Collection',el,'is already added.')
+                break
+            else:
+                mynewnode = ET.Element("{http://www.met.no/schema/mmd}collection")
+                mynewnode.text = el
+                mynode.addprevious(mynewnode)
+                break
+
+    # Dump results to file
+    myxml.write(args.infile, pretty_print=True)
