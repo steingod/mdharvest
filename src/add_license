@@ -55,8 +55,9 @@ if __name__ == '__main__':
     # Read input file
     try:
         myxml = ET.parse(args.infile)
-    except:
+    except Exception as e:
         print("Couldn't parse input file", args.infile)
+        print("Parser returned: ", e)
         sys.exit()
 
     myroot = myxml.getroot()
@@ -76,7 +77,7 @@ if __name__ == '__main__':
         ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'identifier')).text = args.licenseid
         ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'resource')).text = mylicenses[args.licenseid]
         myroot.append(myp)
-    else:
+    elif myel is not None:
         print(ET.tostring(myel))
         print('Already specified...')
         sys.exit()
