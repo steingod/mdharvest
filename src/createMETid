@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+
+"""
+PURPOSE:
+    To add a unique identifier to each MMD record.
+
+AUTHOR:
+    Øystein Godøy, METNO/FOU, 2022-05-19 
+
+UPDATED:
+    Øystein Godøy, METNO/FOU, 2022-05-19 
+        Forked from original version in the MMD repository. Added support for namespace.
+
+"""
+
+import sys
+import getopt
+import argparse
+
+from mdh_modules.createMETUUID import create_MET_uuid
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Generation of MET identifier.',epilog='Specific namespaces can be added to the identifiers using mutually exclusive arguments. The fallback namespace is no.met.adc.')
+
+    parser.add_argument('infile', help='Input file to create identifier for')
+    parser.add_argument('-w','--overwrite',action='store_true', help='Enforce implementation of the identifier in the file instead of just printing it.')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-m','--met',action='store_true',help='no.met namespace for identifier')
+    group.add_argument('-o','--oda',action='store_true',help='no.met.oda namespace for identifier')
+
+    args = parser.parse_args()
+    return args
+
+def main(argv):
+    infile = None
+    overwrite = False
+    args = parse_arguments()
+    
+    if args.infile is None: 
+        usage()
+
+    create_MET_uuid(args)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

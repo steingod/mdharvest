@@ -14,6 +14,8 @@ UPDATED:
         Moved from solrindexing to mdharvest.
     Mortenwh
         Refactored to have a method and an executable
+    Øystein Godøy, METNO/FOU, 2022-05-19 
+        Added support for namespace
 
 """
 import sys
@@ -22,9 +24,9 @@ import uuid
 import datetime
 import xml.etree.ElementTree as ET
 
-def create_MET_uuid(infile, overwrite=False):
+def create_MET_uuid(args):
    # Parse the XML file
-   tree = ET.parse(infile)
+   tree = ET.parse(args.infile)
    ET.register_namespace('mmd','http://www.met.no/schema/mmd')
    ET.register_namespace('gml','http://www.opengid.net/gml')
    root = tree.getroot()
@@ -40,17 +42,25 @@ def create_MET_uuid(infile, overwrite=False):
        sys.exit(2)
 
    # Get the time of creation for the metadatafile
-   #dstime = os.path.getctime(infile)
+   #dstime = os.path.getctime(args.infile)
 
    # Prepare creation of UUID
-   filename = "https://arcticdata.met.no/ds/"+os.path.basename(infile)+"-"
-   #filename += datetime.datetime.utcfromtimestamp(dstime).strftime("%Y%m%dT%H%M%S")
+   filename = "https://arcticdata.met.no/ds/"+os.path.basename(args.infile)+"-"
    filename += mylastupdate
 
    # Create UUID
-   myidentifier = uuid.uuid5(uuid.NAMESPACE_URL,filename)
-   if overwrite == False:
-       print (myidentifier)
+   myuuid = uuid.uuid5(uuid.NAMESPACE_URL,filename)
+   # Add namespace
+   if args.met:
+       myidentifier = 'no.met:'+str(myuuid)
+   elif args.oda:
+       myidentifier = 'no.met.oda:'+str(myuuid)
+   else:
+       myidentifier = 'no.met.adc:'+str(myuuid)
+
+   # Print identifier if not updating file directly
+   if args.overwrite == False:
+       print(myidentifier)
        sys.exit(0)
 
    # Overwrite metadata_identifier in input file
@@ -63,6 +73,6 @@ def create_MET_uuid(infile, overwrite=False):
        myid.text = str(myidentifier)
        root.insert(0, myid)
 
-   tree.write(infile,
+   tree.write(args.infile,
            xml_declaration=True,encoding='UTF-8',
            method="xml")
