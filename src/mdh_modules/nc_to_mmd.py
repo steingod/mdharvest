@@ -466,7 +466,7 @@ class Nc_to_mmd(object):
                 ET.SubElement(mykwcf, ET.QName(mynsmap['mmd'],'keyword')).text = kw
             elif myvoc == 'None':
                 if re.match('Earth Science >',el,re.IGNORECASE):
-                    ET.SubElement(mykwgcmdsk, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+                    ET.SubElement(mykwnone, ET.QName(mynsmap['mmd'],'keyword')).text = kw
                 else:
                     ET.SubElement(mykwnone, ET.QName(mynsmap['mmd'],'keyword')).text = kw
 
