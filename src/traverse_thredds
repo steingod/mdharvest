@@ -30,7 +30,7 @@ def traverse_thredds(mystart, dstdir, mydepth):
         mydir = mystart.split('?')[0].replace('catalog.html','')
     else:
         mydir = mystart.replace('catalog.html','')
-    print('>>>', mystart)
+    #print('>>>', mystart)
     for ds in threddsclient.crawl(mystart, depth=mydepth):
         print('Processing:\n\t', ds.name,sep='')
         #print('\tLanding page:',ds.url,sep='\n\t\t')
@@ -42,17 +42,25 @@ def traverse_thredds(mystart, dstdir, mydepth):
             mypath = (ds.url.split('?')[0].replace('catalog.xml','')).replace(mydir,'')
         else:
             mypath = (ds.url.split('?')[-1])
+        mypath = mypath.replace('dataset=','')
         newdstdir = os.path.join(dstdir,mypath)
+        #print('>>>',newdstdir)
         # Make more robust...
         if not os.path.exists(newdstdir):
             os.makedirs(newdstdir)
         infile = ds.opendap_url()
         outfile = os.path.splitext(ds.name)[0]+'.xml'
+        #print('>>>', infile)
+        #print('>>>', outfile)
+        #print('>>>',ds)
+        #print('>>>',ds.url)
         try:
             md = Nc_to_mmd(dstdir, outfile, infile, False, False, False)
         except Exception as e:
             print('Something failed setting up ACDD extraction', e)
             continue
+        #print('####',md.output_name)
+        #print('####',md.netcdf_product)
         try:
             myxml = md.to_mmd()
         except Exception as e:
@@ -60,6 +68,7 @@ def traverse_thredds(mystart, dstdir, mydepth):
             continue
 
         if myxml is None:
+            print('>>>>>>')
             continue
         # Modify the XML generated with information from THREDDS
         #print('Parsing XML')
@@ -82,7 +91,19 @@ def traverse_thredds(mystart, dstdir, mydepth):
                         try:
                             uuidver = uuid.UUID(mystr).version
                         except ValueError:
-                            print('\tDoes not recognise %s as a valid identifier', mystr)
+                            print('\tDoes not recognise {} as a valid identifier'.format(mystr))
+                            # Check if a DOI is used and use this elsewhere
+                            if 'doi.org' in mystr:
+                                print('\tThis is a doi, putting it in data_citation')
+                                mycit = myxml.find("./mmd:data_citation", myroot.nsmap)
+                                if mycit:
+                                    print("\tThe dataset_citation field is already populated, bailing out.")
+                                else:
+                                    mynewnode = ET.Element("{http://www.met.no/schema/mmd}dataset_citation")
+                                    mydoi = ET.SubElement(mynewnode, "{http://www.met.no/schema/mmd}doi")
+                                    mydoi.text = mynode.text
+                                    myroot.insert(10,mynewnode)
+                            # Generate new identifier
                             try:
                                 mynode.text = str(uuid.uuid5(uuid.NAMESPACE_URL,
                                     ds.url.replace('catalog.xml?dataset=','')))
