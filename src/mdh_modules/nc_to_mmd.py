@@ -432,6 +432,10 @@ class Nc_to_mmd(object):
                 if mykeyw_voc in 'GCMD_Keywords':
                     mykwgcmdsk = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
                     mykwgcmdsk.set('vocabulary','GCMDSK')
+                # Special hack for backwards compatibility for NIRD published data from UiT
+                #if mykeyw_voc in 'GCMD':
+                #    mykwgcmdsk = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
+                #    mykwgcmdsk.set('vocabulary','GCMDSK')
 
         else:
             mykeyw_voc = 'None'
@@ -457,7 +461,7 @@ class Nc_to_mmd(object):
                     mykwnone = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
                     mykwnone.set('vocabulary',myvoc)
                 kw = el.strip()
-            if myvoc == 'GCMDSK' or myvoc == 'GCMD_Keywords':
+            if myvoc == 'GCMDSK' or myvoc == 'GCMD_Keywords' or myvoc == 'GCMD':
                 # Hack for IGPAS... Should be removed in the future...
                 ET.SubElement(mykwgcmdsk, ET.QName(mynsmap['mmd'],'keyword')).text = kw
             elif myvoc == 'GCMDLOC':
@@ -466,7 +470,7 @@ class Nc_to_mmd(object):
                 ET.SubElement(mykwcf, ET.QName(mynsmap['mmd'],'keyword')).text = kw
             elif myvoc == 'None':
                 if re.match('Earth Science >',el,re.IGNORECASE):
-                    ET.SubElement(mykwnone, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+                    ET.SubElement(mykwgcmdsk, ET.QName(mynsmap['mmd'],'keyword')).text = kw
                 else:
                     ET.SubElement(mykwnone, ET.QName(mynsmap['mmd'],'keyword')).text = kw
 

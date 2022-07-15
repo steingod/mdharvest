@@ -197,44 +197,47 @@ def traverse_thredds(mystart, dstdir, mydepth):
         myroot.insert(-1,related_information)
 
         # Add data_access (not done automatically)
-        data_access = ET.Element(
-                '{http://www.met.no/schema/mmd}data_access')
-        data_access_resource = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}resource')
-        data_access_resource.text = ds.download_url()
-        data_access_type = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}type')
-        data_access_type.text = 'HTTP'
-        data_access_description = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}description')
-        data_access_description.text = 'Direct download of datafile'
-        myroot.insert(-1,data_access)
+        if ds.download_url():
+            data_access = ET.Element(
+                    '{http://www.met.no/schema/mmd}data_access')
+            data_access_resource = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}resource')
+            data_access_resource.text = ds.download_url()
+            data_access_type = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}type')
+            data_access_type.text = 'HTTP'
+            data_access_description = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}description')
+            data_access_description.text = 'Direct download of datafile'
+            myroot.insert(-1,data_access)
 
-        data_access = ET.Element(
-                '{http://www.met.no/schema/mmd}data_access')
-        data_access_resource = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}resource')
-        data_access_resource.text = ds.opendap_url()
-        data_access_type = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}type')
-        data_access_type.text = 'OPeNDAP'
-        data_access_description = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}description')
-        data_access_description.text = 'OPeNDAP access to dataset'
-        myroot.insert(-1,data_access)
+        if ds.opendap_url():
+            data_access = ET.Element(
+                    '{http://www.met.no/schema/mmd}data_access')
+            data_access_resource = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}resource')
+            data_access_resource.text = ds.opendap_url()
+            data_access_type = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}type')
+            data_access_type.text = 'OPeNDAP'
+            data_access_description = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}description')
+            data_access_description.text = 'OPeNDAP access to dataset'
+            myroot.insert(-1,data_access)
 
-        data_access = ET.Element(
-                '{http://www.met.no/schema/mmd}data_access')
-        data_access_resource = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}resource')
-        data_access_resource.text = ds.wms_url()
-        data_access_type = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}type')
-        data_access_type.text = 'OGC WMS'
-        data_access_description = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}description')
-        data_access_description.text = 'OGC WMS GetCapabilities URL'
-        myroot.insert(-1,data_access)
+        if ds.wms_url():
+            data_access = ET.Element(
+                    '{http://www.met.no/schema/mmd}data_access')
+            data_access_resource = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}resource')
+            data_access_resource.text = ds.wms_url()
+            data_access_type = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}type')
+            data_access_type.text = 'OGC WMS'
+            data_access_description = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}description')
+            data_access_description.text = 'OGC WMS GetCapabilities URL'
+            myroot.insert(-1,data_access)
 
         # Reference should be removed
         # dataset citation has to be further improved...
