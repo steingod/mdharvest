@@ -55,8 +55,10 @@ def create_MET_uuid(args):
        myidentifier = 'no.met:'+str(myuuid)
    elif args.oda:
        myidentifier = 'no.met.oda:'+str(myuuid)
-   else:
+   elif args.adc:
        myidentifier = 'no.met.adc:'+str(myuuid)
+   else:
+       myidentifier = str(myuuid)
 
    # Print identifier if not updating file directly
    if args.overwrite == False:
