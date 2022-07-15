@@ -294,7 +294,10 @@ class Nc_to_mmd(object):
                 if 'creator_email' in myattrs:
                     ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = creator_email[i].strip()
                 if 'creator_institution' in myattrs:
-                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[i].strip()
+                    if len(creator_institution) == 1:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[0].strip()
+                    else:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[i].strip()
                 i+=1
         if 'contributor_name' in myattrs:
             # Handle technical contact
