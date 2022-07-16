@@ -297,6 +297,8 @@ class Nc_to_mmd(object):
                     if len(creator_institution) == 1:
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[0].strip()
                     else:
+                        if len(creator_name) != len(creator_institution):
+                            continue
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[i].strip()
                 i+=1
         if 'contributor_name' in myattrs:
