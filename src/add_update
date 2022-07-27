@@ -23,14 +23,15 @@ if __name__ == '__main__':
             'For handling of multiple files run through find.')
     parser.add_argument('statement', type=str, 
             help='a brief statement saying what has been done')
+    parser.add_argument('-i','--minor', action='store_true', 
+            help='indicate that this is a minor update')
     parser.add_argument('-m','--major', action='store_true', 
-            help='indicate whether this is a major update')
+            help='indicate that this is a major update')
     parser.add_argument('infile', type=str, 
             help='File to update')
     try:
         args = parser.parse_args()
     except:
-        parser.print_help()
         sys.exit()
 
     # Read input file
@@ -43,21 +44,31 @@ if __name__ == '__main__':
     myroot = myxml.getroot()
 
     # Find existing last_metadata_status keyword and position
-    mynode = myxml.find("./mmd:last_metadata_status",namespaces=myroot.nsmap)
+    mynode = myxml.find("mmd:last_metadata_update",namespaces=myroot.nsmap)
     if mynode == None:
         print('No statement found, adding one...')
         myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"last_metadata_update"),nsmap=myroot.nsmap)
         myp2 = ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],"update"),nsmap=myroot.nsmap)
         ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"datetime"),nsmap=myroot.nsmap).text = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ") 
-        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Created'
-        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"note"),nsmap=myroot.nsmap).text =  'Added license to dataset.'
-
-        myroot.append(myp)
+        if args.major:
+            ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Major modification'
+        elif args.minor:
+            ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Minor modification'
+        else:
+            ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Created'
+        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"note"),nsmap=myroot.nsmap).text = args.statement
+        myroot.append(myp) # Not sure it should be append here...
     else:
         myp2 = ET.SubElement(mynode,ET.QName(myroot.nsmap['mmd'],"update"),nsmap=myroot.nsmap)
         ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"datetime"),nsmap=myroot.nsmap).text = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ") 
-        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Major modification'
-        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"note"),nsmap=myroot.nsmap).text =  'Added license to dataset.'
+        if args.major:
+            ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Major modification'
+        elif args.minor:
+            ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Minor modification'
+        else:
+            ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"type"),nsmap=myroot.nsmap).text =  'Created'
+        ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],"note"),nsmap=myroot.nsmap).text = args.statement 
+        mynode.append(myp2)
 
     # Dump results to file
     myxml.write(args.infile, pretty_print=True)
