@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+#
+# Name:
+# add_collection
+#
+# Purpose:
+# Add a collection keyword to a dataset.
+# 
+# Author:
+# Øystein Godøy, METNO/FOU, 2020-10-06, original version
+#
+import sys
+import os
+import argparse
+import lxml.etree as ET
+from datetime import datetime
+import pytz
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+            description='Add ADC data centre element to MMD records. '+
+            'For handling of multiple files run through find.')
+    parser.add_argument('infile', type=str, help='File to update')
+    try:
+        args = parser.parse_args()
+    except:
+        sys.exit()
+    return(args)
+
+def add_dc(myfile):
+    # Read input file
+    try:
+        myxml = ET.parse(myfile)
+    except:
+        print("Couldn't parse input file",myfile)
+        raise
+
+    myroot = myxml.getroot()
+
+    # Find existing elements
+    myel =  myroot.find("mmd:data_center", namespaces=myroot.nsmap)
+    if myel is not None:
+        #print(ET.tostring(myel))
+        print('Already specified...')
+        return
+
+    # Construct element
+    myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"data_center"),nsmap=myroot.nsmap)
+    myp2 = ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'data_center_name'))
+    ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],'short_name')).text = 'NO/MET/ADC'
+    ET.SubElement(myp2,ET.QName(myroot.nsmap['mmd'],'long_name')).text = 'Norwegian Meteorological Institute / Arctic Data Centre'
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'data_center_url')).text = 'https://adc.met.no/' 
+    myroot.append(myp)
+    myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"personnel"),nsmap=myroot.nsmap)
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'role')).text = 'Data center contact'
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'name')).text = 'ADC support'
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'email')).text = 'adc-support@met.no'
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'organisation')).text = 'Norwegian Meteorological Institute / Arctic Data Centre'
+    myroot.append(myp)
+
+    # Dump results to file
+    #myxml.write('myfile.xml', pretty_print=True)
+    myxml.write(myfile, pretty_print=True)
+
+    return
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    try:
+        args = parse_arguments()
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    # Process file
+    try:
+        add_dc(args.infile)
+    except Exception as e:
+        print(e)
+        sys.exit()
+

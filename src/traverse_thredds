@@ -68,7 +68,6 @@ def traverse_thredds(mystart, dstdir, mydepth):
             continue
 
         if myxml is None:
-            print('>>>>>>')
             continue
         # Modify the XML generated with information from THREDDS
         #print('Parsing XML')
@@ -79,6 +78,7 @@ def traverse_thredds(mystart, dstdir, mydepth):
         #print(mynode.text, ds.url.replace('catalog.xml?dataset=',''))
         # If ID is not a UUID, replace with a newly generated UUID
         # Check if UUID is prefixed by namespace
+        # Everything below is focused at the ADC operation, so no.met.adc is the preferred prefix
         if mynode is not None:
             try:
                 uuidver = uuid.UUID(mynode.text).version
@@ -109,7 +109,7 @@ def traverse_thredds(mystart, dstdir, mydepth):
                                     ds.url.replace('catalog.xml?dataset=','')))
                             except TypeError as e:
                                 print(e)
-                        print('\tContains identifier with namespace prefixed UUID')
+                        print('\tContains identifier with probable namespace prefixed UUID')
                     elif '.' in mynode.text:
                         mystr = mynode.text.split('.')[-1]
                         print('\tThis type of identifier is not properly supported yet')
@@ -123,7 +123,7 @@ def traverse_thredds(mystart, dstdir, mydepth):
         else:
             try:
                 mynode = ET.Element("{http://www.met.no/schema/mmd}metadata_identifier")
-                mynode.text = str(uuid.uuid5(uuid.NAMESPACE_URL,
+                mynode.text = 'no.met.adc:'+str(uuid.uuid5(uuid.NAMESPACE_URL,
                     ds.url.replace('catalog.xml?dataset=','')))
             except TypeError as e:
                 print(e)
