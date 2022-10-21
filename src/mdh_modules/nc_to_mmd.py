@@ -193,7 +193,14 @@ class Nc_to_mmd(object):
     # Check both date_created and date_metadata_modified
     # FIXME add multiple updates
     def add_last_metadata_update(self, myxmltree, mynsmap, ncin, myattrs):
-        mydatetime = parse(getattr(ncin, 'date_created'))
+        # Hack that will correct some files while waiting for updated versions
+        tmpdatetime = getattr(ncin, 'date_created')
+        tmpdatetime = tmpdatetime.replace(':Z','Z')
+        tmpdate = re.search(r'\d{4}-\d{2}-\d{2}',tmpdatetime)
+        if not re.search(r'T\d{2}:\d{2}:\d{2}',tmpdatetime):
+            tmptime="T12:00:00Z"
+            tmpdatetime = tmpdate.group()+tmptime
+        mydatetime = parse(tmpdatetime)
         if 'date_metadata_modified' in myattrs:
             myupdate = getattr(ncin, 'date_metadata_modified')
         else:
@@ -272,19 +279,28 @@ class Nc_to_mmd(object):
             creator_name = []
             if 'Institute of Geophysics, Polish Academy of Sciences' in tmpvar:
                 creator_name.append(tmpvar)
+            elif "Jean Rabault, using data from Takehiko Nose" in tmpvar:
+                creator_name.append(tmpvar)
             else:
                 creator_name = tmpvar.split(',')
             if 'creator_email' in myattrs:
                 creator_email = getattr(ncin, 'creator_email').split(',')
             if 'creator_institution' in myattrs:
-                creator_institution = getattr(ncin, 'creator_institution').split(',')
+                tmpvar = getattr(ncin, 'creator_institution')
+                if "Norwegian Meteorological Institute (MET), using data from the University of Tokyo" in tmpvar:
+                    creator_institution = "Norwegian Meteorological Institute"
+                else:
+                    creator_institution = getattr(ncin, 'creator_institution').split(',')
+            nmlen = len(creator_name)
+            emlen = len(creator_email)
+            inlen = len(creator_institution)
             # Check if in vars()
             if ('creator_email' in vars() and 'creator_institution' in vars()):
                 if len(creator_name) != len(creator_email) or len(creator_name) != len(creator_institution):
-                    print('Inconsistency in personnel elements, not adding some of these')
+                    print('Inconsistency in personnel (creator) elements, not adding some of these')
             elif ('creator_email' in vars()):
                 if len(creator_name) != len(creator_email) != len(creator_institution):
-                    print('Inconsistency in personnel elements, not adding some of these')
+                    print('Inconsistency in personnel (creator) elements, not adding some of these')
             # Create the XML
             i = 0
             for el in creator_name:
@@ -292,13 +308,14 @@ class Nc_to_mmd(object):
                 ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = el.strip()
                 ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Investigator'
                 if 'creator_email' in myattrs:
-                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = creator_email[i].strip()
-                if 'creator_institution' in myattrs:
-                    if len(creator_institution) == 1:
-                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[0].strip()
+                    if i > emlen-1:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = creator_email[emlen-1].strip()
                     else:
-                        if len(creator_name) != len(creator_institution):
-                            continue
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = creator_email[i].strip()
+                if 'creator_institution' in myattrs:
+                    if i > inlen-1:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[inlen-1].strip()
+                    else:
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[i].strip()
                 i+=1
         if 'contributor_name' in myattrs:
@@ -312,10 +329,10 @@ class Nc_to_mmd(object):
             # Check if in vars()
             if ('contributor_email' in vars() and 'contributor_institution' in vars()):
                 if len(contributor_name) != len(contributor_email) or len(contributor_name) != len(contributor_institution):
-                    print('Inconsistency in personnel elements, not adding some of these')
+                    print('Inconsistency in personnel (contributor) elements, not adding some of these')
             elif ('contributor_email' in vars()):
                 if len(contributor_name) != len(contributor_email) != len(contributor_institution):
-                    print('Inconsistency in personnel elements, not adding some of these')
+                    print('Inconsistency in personnel (contributor) elements, not adding some of these')
             # Create the XML
             i = 0
             for el in contributor_name:
@@ -330,18 +347,22 @@ class Nc_to_mmd(object):
         if 'publisher_name' in myattrs:
             # Handle data center personnel
             # Check if element contains a list, if so make sure the same list order is used for macthing elements
+            nmlen = inlen = emlen = 0
             publisher_name = getattr(ncin, 'publisher_name').split(',')
+            nmlen = len(publisher_name)
             if 'publisher_email' in myattrs:
                 publisher_email = getattr(ncin, 'publisher_email').split(',')
+                emlen = len(publisher_email)
             if 'publisher_institution' in myattrs:
                 publisher_institution = getattr(ncin, 'publisher_institution').split(',')
+                inlen = len(publisher_institution)
             # Check if in vars()
             if ('publisher_email' in vars() and 'publisher_institution' in vars()):
                 if len(publisher_name) != len(publisher_email) or len(publisher_name) != len(publisher_institution):
-                    print('Inconsistency in personnel elements, not adding some of these')
+                    print('Inconsistency in personnel (publisher) elements, not adding some of these')
             elif ('publisher_email' in vars()):
-                if len(publisher_name) != len(publisher_email) != len(publisher_institution):
-                    print('Inconsistency in personnel elements, not adding some of these')
+                if len(publisher_name) != len(publisher_email):
+                    print('Inconsistency in personnel (publisher) elements, not adding some of these')
             # Create the XML
             i = 0
             for el in publisher_name:
@@ -349,9 +370,15 @@ class Nc_to_mmd(object):
                 ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = el.strip()
                 ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Data center contact'
                 if 'publisher_email' in myattrs:
-                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[i].strip()
+                    if i > emlen-1:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[emlen-1].strip()
+                    else:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[i].strip()
                 if 'publisher_institution' in myattrs:
-                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[i].strip()
+                    if i > inlen-1:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[inlen-1].strip()
+                    else:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[i].strip()
                 i+=1
 
     # Add data centre
@@ -548,7 +575,8 @@ class Nc_to_mmd(object):
                             refdoi = u[0]
                         else:
                             refurl = u[0]
-        myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'dataset_citation'))
+        if refdoi or refurl:
+            myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'dataset_citation'))
         if refdoi is not None:
             ET.SubElement(myel,ET.QName(mynsmap['mmd'],'doi')).text = refdoi
         if refurl is not None:
