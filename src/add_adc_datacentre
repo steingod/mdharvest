@@ -43,7 +43,7 @@ def add_dc(myfile, overwrite):
     if myel is not None and overwrite:
         print('Removing existing element')
         myel.getparent().remove(myel)
-    else:
+    elif myel is not None:
         #print(ET.tostring(myel))
         print('Already specified...')
         return
