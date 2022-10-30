@@ -116,7 +116,7 @@ def traverse_thredds(mystart, dstdir, mydepth):
                         sys.exit()
                 else:
                     try:
-                        mynode.text = str(uuid.uuid5(uuid.NAMESPACE_URL,
+                        mynode.text = 'no.met.adc:'+str(uuid.uuid5(uuid.NAMESPACE_URL,
                             ds.url.replace('catalog.xml?dataset=','')))
                     except TypeError as e:
                         print(e)
