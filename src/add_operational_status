@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 #
 # Name:
-# add_iso_topic_category
+# add_operational_status
 #
 # Purpose:
-# Add iso_topic_category to a MMD dataset. This field can be repeated.
+# Add a operational_status to a MMD dataset. This field can be repeated.
 # 
 # Author:
 # Øystein Godøy, METNO/FOU, 2020-10-06, original version
@@ -18,11 +18,10 @@ import pytz
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-            description='Add iso_topic_category element to MMD records. '+
-            'For handling of multiple files run through find. Valid keywords are provided in https://htmlpreview.github.io/?https://github.com/metno/mmd/blob/master/doc/mmd-specification.html#iso-topic-categories-type, checking against vocabulary server to be added.')
-    parser.add_argument('iso_topic_category', type=str, help='String representing iso_topic_category')
+            description='Add MMD operational_status element to MMD records. '+
+            'For handling of multiple files run through find. Valid keywords are provided in https://htmlpreview.github.io/?https://github.com/metno/mmd/blob/master/doc/mmd-specification.html#operational-status, checking against vocabulary server to be added.')
+    parser.add_argument('operational_status', type=str, help='String representing operational_status')
     parser.add_argument('infile', type=str, help='File to update')
-    parser.add_argument('-a','--append', action='store_true', help='Add element field even if it exists.')
     parser.add_argument('-o','--overwrite', action='store_true', help='Overwrite existing element field (i.e. replace).')
     try:
         args = parser.parse_args()
@@ -30,7 +29,7 @@ def parse_arguments():
         sys.exit()
     return(args)
 
-def add_at(myfile, isotc, overwrite, append):
+def add_os(myfile, os, overwrite):
     # Read input file
     try:
         myxml = ET.parse(myfile)
@@ -41,14 +40,11 @@ def add_at(myfile, isotc, overwrite, append):
     myroot = myxml.getroot()
 
     # Find existing elements
-    myel =  myroot.find("mmd:iso_topic_category", namespaces=myroot.nsmap)
-    if myel is not None and not append and not overwrite:
-        print('Already specified, not changing anything in ', myfile)
-        return
+    myel =  myroot.find("mmd:operational_status", namespaces=myroot.nsmap)
 
     # Construct element
-    myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"iso_topic_category"),nsmap=myroot.nsmap)
-    myp.text = isotc
+    myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"operational_status"),nsmap=myroot.nsmap)
+    myp.text = os
     if myel is not None:
         myel.addprevious(myp)
         if overwrite:
@@ -71,13 +67,9 @@ if __name__ == '__main__':
         print(e)
         sys.exit()
 
-    if args.overwrite and args.append:
-        print('Both overwrite and append is not supported as simultaneous commands yet.')
-        sys.exit()
-
     # Process file
     try:
-        add_at(args.infile, args.iso_topic_category, args.overwrite, args.append)
+        add_os(args.infile, args.operational_status, args.overwrite)
     except Exception as e:
         print(e)
         sys.exit()
