@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+#
+# Name:
+# add_activity_type
+#
+# Purpose:
+# Add a activity_type to a MMD dataset. This field can be repeated.
+# 
+# Author:
+# Øystein Godøy, METNO/FOU, 2020-10-06, original version
+#
+import sys
+import os
+import argparse
+import lxml.etree as ET
+from datetime import datetime
+import pytz
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+            description='Add MMD activity_type element to MMD records. '+
+            'For handling of multiple files run through find. Valid keywords are provided in https://htmlpreview.github.io/?https://github.com/metno/mmd/blob/master/doc/mmd-specification.html#activity-type, checking against vocabulary server to be added.')
+    parser.add_argument('activity_type', type=str, help='String representing activity_type')
+    parser.add_argument('infile', type=str, help='File to update')
+    parser.add_argument('-a','--append', action='store_true', help='Add element field even if it exists.')
+    parser.add_argument('-o','--overwrite', action='store_true', help='Overwrite existing element field (i.e. replace).')
+    try:
+        args = parser.parse_args()
+    except:
+        sys.exit()
+    return(args)
+
+def add_at(myfile, at, overwrite, append):
+    # Read input file
+    try:
+        myxml = ET.parse(myfile)
+    except:
+        print("Couldn't parse input file",myfile)
+        raise
+
+    myroot = myxml.getroot()
+
+    # Find existing elements
+    myel =  myroot.find("mmd:activity_type", namespaces=myroot.nsmap)
+    if myel is not None and overwrite:
+        print('Replacing existing element in ', myfile)
+        myel.getparent().remove(myel)
+    elif myel is not None and not append:
+        #print(ET.tostring(myel))
+        print('Already specified, not changing anything in ', myfile)
+        return
+
+    # Construct element
+    myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"activity_type"),nsmap=myroot.nsmap)
+    myp.text = at
+    if myel is not None:
+        myel.addprevious(myp)
+    else:
+        myel =  myroot.find("mmd:collection", namespaces=myroot.nsmap)
+        myel.addprevious(myp)
+
+    # Dump results to file
+    #myxml.write('myfile.xml', pretty_print=True)
+    myxml.write(myfile, pretty_print=True)
+
+    return
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    try:
+        args = parse_arguments()
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    if args.overwrite and args.append:
+        print('Both overwrite and append is not supported as simultaneous commands yet.')
+        sys.exit()
+
+    # Process file
+    try:
+        add_at(args.infile, args.activity_type, args.overwrite, args.append)
+    except Exception as e:
+        print(e)
+        sys.exit()
+
