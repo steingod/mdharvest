@@ -62,9 +62,11 @@ class Nc_to_mmd(object):
         all_netcdf_variables = [var for var in ncin.variables]
 
         # Create XML file with namespaces
-        ns_map = {'mmd': "http://www.met.no/schema/mmd"}
+        ns_map = {'mmd': "http://www.met.no/schema/mmd",
+                  'xml': "http://www.w3.org/XML/1998/namespace"}
                  # 'gml': "http://www.opengis.net/gml"}
-        root = ET.Element(ET.QName(ns_map['mmd'], 'mmd'), nsmap=ns_map)
+        #root = ET.Element(ET.QName(ns_map['mmd'], 'mmd'), nsmap=ns_map)
+        root = ET.Element('mmd', nsmap=ns_map)
 
         # Write MMD elements from global attributes in NetCDF following a KISS approach starting with the required MMD element and looking for the ACDD element to parse. 
 
@@ -219,14 +221,14 @@ class Nc_to_mmd(object):
         mytitle = getattr(ncin, 'title')
         myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'title'))
         myel.text = mytitle
-        myel.set('lang','en')
+        myel.set('{http://www.w3.org/XML/1998/namespace}lang','en')
 
     # Assuming english as default language
     def add_abstract(self, myxmltree, mynsmap, ncin):
         myabstract = getattr(ncin, 'summary')
         myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'abstract'))
         myel.text = myabstract
-        myel.set('lang','en')
+        myel.set('{http://www.w3.org/XML/1998/namespace}lang','en')
 
     # Add check and rewrite of longitudes.
     def add_geographic_extent(self, myxmltree, mynsmap, ncin, myattrs):
