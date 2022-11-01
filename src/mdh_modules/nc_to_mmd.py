@@ -195,14 +195,18 @@ class Nc_to_mmd(object):
     # Check both date_created and date_metadata_modified
     # FIXME add multiple updates
     def add_last_metadata_update(self, myxmltree, mynsmap, ncin, myattrs):
-        # Hack that will correct some files while waiting for updated versions
         tmpdatetime = getattr(ncin, 'date_created')
-        tmpdatetime = tmpdatetime.replace(':Z','Z')
-        tmpdate = re.search(r'\d{4}-\d{2}-\d{2}',tmpdatetime)
-        if not re.search(r'T\d{2}:\d{2}:\d{2}',tmpdatetime):
-            tmptime="T12:00:00Z"
-            tmpdatetime = tmpdate.group()+tmptime
+        # First try to convert whatever is found
         mydatetime = parse(tmpdatetime)
+        # Hack that will correct some files while waiting for updated versions
+        if mydatetime is None:
+            tmpdatetime = tmpdatetime.replace(':Z','Z')
+            tmpdate = re.search(r'\d{4}-\d{2}-\d{2}',tmpdatetime)
+            if not re.search(r'T\d{2}:\d{2}:\d{2}',tmpdatetime):
+                tmptime="T12:00:00Z"
+                tmpdatetime = tmpdate.group()+tmptime
+        mydatetime = parse(tmpdatetime)
+        # Prepare the output
         if 'date_metadata_modified' in myattrs:
             myupdate = getattr(ncin, 'date_metadata_modified')
         else:
