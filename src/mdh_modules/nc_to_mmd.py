@@ -65,8 +65,8 @@ class Nc_to_mmd(object):
         ns_map = {'mmd': "http://www.met.no/schema/mmd",
                   'xml': "http://www.w3.org/XML/1998/namespace"}
                  # 'gml': "http://www.opengis.net/gml"}
-        #root = ET.Element(ET.QName(ns_map['mmd'], 'mmd'), nsmap=ns_map)
-        root = ET.Element('mmd', nsmap=ns_map)
+        root = ET.Element(ET.QName(ns_map['mmd'], 'mmd'), nsmap=ns_map)
+        #root = ET.Element('mmd', nsmap=ns_map)
 
         # Write MMD elements from global attributes in NetCDF following a KISS approach starting with the required MMD element and looking for the ACDD element to parse. 
 
