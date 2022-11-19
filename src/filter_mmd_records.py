@@ -212,7 +212,7 @@ class LocalCheckMMD():
                 for myel in elements:
                     for myfield in bboxfields:
                         if myel.find('mmd:rectangle/'+myfield,
-                                namespaces=root.nsmap):
+                                namespaces=root.nsmap) is not None:
                             myvalue = myel.find('mmd:rectangle/'+myfield,
                                     namespaces=root.nsmap).text
                             if myvalue == None or myvalue.isspace():
