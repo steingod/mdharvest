@@ -29,16 +29,16 @@ def parse_arguments():
         sys.exit()
     return(args)
 
-def update_last_metadata(myupdate, mynsmap, mystatus):
+def update_last_metadata(myroot, myupdate, mynsmap, mystatus):
 
     if myupdate == None:
-        print('No statement found, adding one...')
+        print('No last_metadata_update statement found, adding one...')
         myp = ET.Element(ET.QName(mynsmap['mmd'],"last_metadata_update"),nsmap=mynsmap)
         myp2 = ET.SubElement(myp,ET.QName(mynsmap['mmd'],"update"),nsmap=mynsmap)
         ET.SubElement(myp2,ET.QName(mynsmap['mmd'],"datetime"),nsmap=mynsmap).text = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ") 
         ET.SubElement(myp2,ET.QName(mynsmap['mmd'],"type"),nsmap=mynsmap).text =  'Major modification'
         ET.SubElement(myp2,ET.QName(mynsmap['mmd'],"note"),nsmap=mynsmap).text = "Added missing last_metadata_update and set dataset status to "+mystatus
-        myroot.append(myp) # Not sure it should be append here...
+        myroot.insert(1, myp) 
     else:
         myp2 = ET.SubElement(myupdate,ET.QName(mynsmap['mmd'],"update"),nsmap=mynsmap)
         ET.SubElement(myp2,ET.QName(mynsmap['mmd'],"datetime"),nsmap=mynsmap).text = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ") 
@@ -73,7 +73,7 @@ def set_active(myfile):
 
     # Update last_metadata_status
     myupdate = myroot.find("mmd:last_metadata_update",namespaces=myroot.nsmap)
-    update_last_metadata(myupdate, myroot.nsmap, 'Active')
+    update_last_metadata(myroot, myupdate, myroot.nsmap, 'Active')
 
     # Dump results to file
     #myxml.write('myfile.xml', pretty_print=True)
@@ -106,7 +106,7 @@ def set_inactive(myfile):
 
     # Update last_metadata_status
     myupdate = myroot.find("mmd:last_metadata_update",namespaces=myroot.nsmap)
-    update_last_metadata(myupdate, myroot.nsmap, 'Inactive')
+    update_last_metadata(myroot, myupdate, myroot.nsmap, 'Inactive')
 
     # Dump results to file
     #myxml.write('myfile.xml', pretty_print=True)
