@@ -450,8 +450,12 @@ class Nc_to_mmd(object):
                         mykeyw_voc = myarr[0].strip()
                         mykeyw_nam = myarr[1].strip()
                 else:
-                    # If no colon is present, assumes identifier is listed
-                    mykeyw_voc = el
+                    # Added exception to handle OSISAF
+                    if el == "GCMD Science Keywords":
+                        mykeyw_voc = "GCMDSK"
+                    else:
+                        # If no colon is present, assumes identifier is listed
+                        mykeyw_voc = el
                 # Set up MMD keywords elements to fill with content
                 if mykeyw_voc in valid_identifiers:
                     if mykeyw_voc == 'None':
