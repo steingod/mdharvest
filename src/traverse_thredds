@@ -44,7 +44,7 @@ def traverse_thredds(mystart, dstdir, mydepth):
         else:
             mypath = (ds.url.split('?')[-1])
         mypath = mypath.replace('dataset=','')
-        mypath = re.sub('https://*.*.*/catalog/','',mypath)
+        mypath = re.sub('https?://*.*.*/catalog/','',mypath)
         newdstdir = os.path.join(dstdir,mypath)
         #print('>>>',newdstdir)
         # Make more robust...
