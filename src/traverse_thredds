@@ -117,8 +117,14 @@ def traverse_thredds(mystart, dstdir, mydepth):
                         print('\tThis type of identifier is not properly supported yet')
                         sys.exit()
                 else:
+                    if "met.no" in ds.url:
+                        idnamespace = "no.met.adc:"
+                    elif "nersc.no" in ds.url:
+                        idnamespace = "no.nersc:"
+                    else:
+                        idnamespace = ""
                     try:
-                        mynode.text = 'no.met.adc:'+str(uuid.uuid5(uuid.NAMESPACE_URL,
+                        mynode.text = idnamespace+str(uuid.uuid5(uuid.NAMESPACE_URL,
                             ds.url.replace('catalog.xml?dataset=','')))
                     except TypeError as e:
                         print(e)
