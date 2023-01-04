@@ -113,10 +113,21 @@ def traverse_thredds(mystart, dstdir, mydepth):
                                 print(e)
                         print('\tContains identifier with probable namespace prefixed UUID')
                     elif '.' in mynode.text:
+                        # This is normally caused by filenames being used as identifiers. These have less probability of being unique and are replaced by UUIDs, with MET namespaces if hosted by MET.
                         mystr = mynode.text.split('.')[-1]
-                        print('\tThis type of identifier is not properly supported yet')
-                        sys.exit()
+                        if "met.no" in ds.url:
+                            idnamespace = "no.met.adc:"
+                        elif "nersc.no" in ds.url:
+                            idnamespace = "no.nersc:"
+                        else:
+                            idnamespace = ""
+                        try:
+                            mynode.text = idnamespace+str(uuid.uuid5(uuid.NAMESPACE_URL,
+                                ds.url.replace('catalog.xml?dataset=','')))
+                        except TypeError as e:
+                            print(e)
                 else:
+                    # This is often caused by filenames without suffix being used as identifiers. Same as above, these are likely to be compromised and are replaced by UUIDs.
                     if "met.no" in ds.url:
                         idnamespace = "no.met.adc:"
                     elif "nersc.no" in ds.url:
