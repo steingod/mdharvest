@@ -532,13 +532,25 @@ class Nc_to_mmd(object):
             myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'short_name'))
             myel2.text = myshortname.strip()
 
-    # Add platform, relies on controlled vocabualry in MMD, will read platform and platform_vcoabulary from ACDD if the latter is present and map
+    # Add platform, relies on controlled vocabulary in MMD, will read platform and platform_vocabulary from ACDD if the latter is present and map
     def add_platform(self, myxmltree, mynsmap, ncin, myattrs):
         myplatform = getattr(ncin, 'platform')
-        myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
-        # Not added yet since MMD only relies on satellite data for now.
-        valid_statements = []
-        myel.text = myplatform
+        if ',' in myplatform:
+            # Split string in multiple elements
+            myplatform = myplatform.split(',')
+        if isinstance(myplatform, list):
+            myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
+            for el in platform:
+                myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
+                # Not added yet since MMD only relies on satellite data for now.
+                valid_statements = []
+                myel2.text = el
+        else:
+            myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
+            myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
+            # Not added yet since MMD only relies on satellite data for now.
+            valid_statements = []
+            myel2.text = myplatform
 
     # Add activity_type, relies on source and controlled vocabulary. If vocabulary isn't used leave open. Uses local extension if available
     def add_activity_type(self, myxmltree, mynsmap, ncin, myattrs):
