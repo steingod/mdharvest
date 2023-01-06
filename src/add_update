@@ -44,7 +44,7 @@ if __name__ == '__main__':
     myroot = myxml.getroot()
 
     # Find existing last_metadata_status keyword and position
-    mynode = myxml.find("mmd:last_metadata_update",namespaces=myroot.nsmap)
+    mynode = myroot.find("mmd:last_metadata_update",namespaces=myroot.nsmap)
     if mynode == None:
         print('No statement found, adding one...')
         myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"last_metadata_update"),nsmap=myroot.nsmap)
