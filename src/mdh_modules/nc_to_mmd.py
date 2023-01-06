@@ -298,14 +298,16 @@ class Nc_to_mmd(object):
                 else:
                     creator_institution = getattr(ncin, 'creator_institution').split(',')
             nmlen = len(creator_name)
-            emlen = len(creator_email)
-            inlen = len(creator_institution)
+            if 'creator_email' in myattrs:
+                emlen = len(creator_email)
+            if 'creator_institution' in myattrs:
+                inlen = len(creator_institution)
             # Check if in vars()
             if ('creator_email' in vars() and 'creator_institution' in vars()):
                 if len(creator_name) != len(creator_email) or len(creator_name) != len(creator_institution):
                     print('Inconsistency in personnel (creator) elements, not adding some of these')
             elif ('creator_email' in vars()):
-                if len(creator_name) != len(creator_email) != len(creator_institution):
+                if len(creator_name) != len(creator_email):
                     print('Inconsistency in personnel (creator) elements, not adding some of these')
             # Create the XML
             i = 0
