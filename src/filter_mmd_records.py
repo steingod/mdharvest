@@ -338,8 +338,8 @@ def main(argv):
         bounding = [90.,40.,70.,-20.]
         collection = "SIOS"
     elif args.infranor:
-        project = "INFRANOR"
-        collection = "INFRANOR"
+        project = "SIOS INFRANOR"
+        collection = "SIOSIN"
     elif args.nmap:
         project = "NORMAP"
         collection = "NMAP"
