@@ -488,6 +488,9 @@ class Nc_to_mmd(object):
         # Now we fill MMD keywords elements with content...
         ##myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
         tmp = getattr(ncin, 'keywords')
+        if re.search('Earth Science >',tmp,re.IGNORECASE):
+            mykwgcmdsk = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
+            mykwgcmdsk.set('vocabulary','GCMDSK')
         values = getattr(ncin,'keywords').split(',')
         for el in values:
             if ':' in el:
