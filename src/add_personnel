@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+#
+# Name:
+# add_personnel
+#
+# Purpose:
+# Add a personnel to a MMD dataset. This field can be repeated.
+# 
+# Author:
+# Øystein Godøy, METNO/FOU, 2023-02-24  
+#
+import sys
+import os
+import argparse
+import yaml
+import lxml.etree as ET
+from datetime import datetime
+import pytz
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+            description='Add MMD personnel element to MMD records. '+
+            'For handling of multiple files run through find. Valid keywords for role are provided in https://htmlpreview.github.io/?https://github.com/metno/mmd/blob/master/doc/mmd-specification.html#contact-roles, checking against vocabulary server to be added.')
+    parser.add_argument('cfgfile', type=str, help='Configuration file in YAML  with personnel details')
+    parser.add_argument('infile', type=str, help='File to update')
+    parser.add_argument('-a','--append', action='store_true', help='Add element field even if it exists.')
+    parser.add_argument('-o','--overwrite', action='store_true', help='Overwrite existing element field (i.e. replace).')
+    try:
+        args = parser.parse_args()
+    except:
+        sys.exit()
+    return(args)
+
+def parse_personnel(cfgfile):
+
+    with open(cfgfile,'r') as ymlfile:
+        personnel = yaml.full_load(ymlfile)
+
+    return(personnel)
+
+def add_personnel(myfile, personnel, overwrite, append):
+    # Read input file
+    try:
+        myxml = ET.parse(myfile)
+    except:
+        print("Couldn't parse input file",myfile)
+        raise
+
+    myroot = myxml.getroot()
+
+    # Find existing elements
+    myel =  myroot.find("mmd:personnel", namespaces=myroot.nsmap)
+    if myel is not None and not append and not overwrite:
+        print('Already specified, not changing anything in ', myfile)
+        return
+
+    # Construct element
+    myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"personnel"),nsmap=myroot.nsmap)
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'name')).text = personnel['name']
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'role')).text = personnel['role']
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'email')).text = personnel['email']
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'organisation')).text = personnel['organisation']
+    if myel is not None:
+        myel.addnext(myp)
+        if overwrite:
+            print('Replacing existing element in ', myfile)
+            myel.getparent().remove(myel)
+    else:
+        myel =  myroot.find("mmd:collection", namespaces=myroot.nsmap)
+        myel.addnext(myp)
+
+    # Dump results to file
+    #myxml.write('myfile.xml', pretty_print=True)
+    myxml.write(myfile, pretty_print=True)
+
+    return
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    try:
+        args = parse_arguments()
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    if args.overwrite and args.append:
+        print('Both overwrite and append is not supported as simultaneous commands yet.')
+        sys.exit()
+
+    # Parse YAML file with personnel details
+    try:
+        personnel = parse_personnel(args.cfgfile)
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    # Process file
+    try:
+        add_personnel(args.infile, personnel, args.overwrite, args.append)
+    except Exception as e:
+        print(e)
+        sys.exit()
+
