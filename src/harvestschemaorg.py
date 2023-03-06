@@ -225,18 +225,6 @@ if __name__ == '__main__':
     """
     some relevant links for testing
     """
-    # Works somewhat
-    #metadata_box = extract_metadata("https://arcticdata.io/")
-    # Don't work properly
-    #metadata_box = extract_metadata("https://arcticdata.io/metacat/sitemaps/sitemap_index.xml")
-    #metadata_box = extract_metadata("https://arcticdata.io/metacat/sitemaps/sitemap1.xml")
-    #metadata_box = extract_metadata("https://arcticdata.io/catalog/view/urn%3Auuid%3A204a2313-9265-4bbe-ae7d-380531c6a654")
-    #metadata_box = extract_metadata("https://data.g-e-m.dk/")
-    # Works, but no reference to proper metadata
-    #metadata_box = extract_metadata("https://data.g-e-m.dk/Datasets?doi=10.17897/KBN7-WP73")
-    # Works, but not through extruct, reads json directly...
-    #metadata_box = extract_metadata("https://data.g-e-m.dk/umbraco/surface/gemsurface/DatasetSchemaOrg?doi=10.17897/KBN7-WP73")
-    # https://data.g-e-m.dk/sitemap
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(
@@ -257,7 +245,5 @@ if __name__ == '__main__':
     except Exception as e:
         print('Something went wrong:', e)
         sys.exit()
-
-    #print(json.dumps(metadata_box['json-ld']))
 
     sys.exit()
