@@ -89,41 +89,42 @@ def traversesite(url, dstdir):
             continue
         #print(sosomd)
         mmd = sosomd2mmd(sosomd)
+        if mmd == None:
+            print('Record is not complete and is skipped...')
+            continue
         # Dump MMD file
         output_file = 'mytestfile.xml' # while testing...
         #output_file = sosomd['identifier']
         et = ET.ElementTree(mmd)
         et.write(output_file, pretty_print=True)
-        sys.exit()
 
     return
 
 def sosomd2mmd(sosomd):
 
-    print('Now in sosmd...')
-    print(json.dumps(sosomd, indent=2))
+    print('Now in sosomd2mmd...')
+    print(sosomd)
 
     # Create XML file with namespaces
     ET.register_namespace('mmd',"http://www.met.no/schema/mmd")
     ns_map = {'mmd': "http://www.met.no/schema/mmd"}
              # 'gml': "http://www.opengis.net/gml"}
-    print(type(ns_map['mmd']))
-    print((ns_map['mmd']))
-    print('>>>>>>',ET.QName(ns_map['mmd'], 'mmd'))
-    print('>>>>>>',type(ET.QName(ns_map['mmd'], 'mmd')))
     
-    root = ET.Element(str(ET.QName(ns_map['mmd'], 'mmd')), nsmap=ns_map['mmd'])
-    print('So far so good...')
+    myroot = ET.Element(ET.QName(ns_map['mmd'], 'mmd'), nsmap=ns_map)
 
     # identifier
-    myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'metadata_identifier'))
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_identifier'))
+    # Only valid for GEM
+    #myel.text = sosomd['identifier']['value']
     myel.text = sosomd['identifier']
-    print('So far so good...')
     # metadata update
-    myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'last_metadata_update'))
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'last_metadata_update'))
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
-    ET.SubElement(myel2,
-            ET.QName(ns_map['mmd'],'datetime')).text = sosomd['datePublished']
+    myel3 = ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime'))
+    if 'datePublished' in sosomd:
+        myel3.text = sosomd['datePublished']
+    else:
+        print('datePublished not found in record, leaving empty...')
     ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Created'
     ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
     if 'dateModified' in sosomd:
@@ -133,30 +134,34 @@ def sosomd2mmd(sosomd):
         ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Updated'
         ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
     # metadata status
-    myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'metadata_status'))
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_status'))
     myel.text = 'Active'
     # title
-    myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'title'))
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'title'))
     myel.text = sosomd['name']
     myel.set('lang','en')
     # abstract
-    myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'abstract'))
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'abstract'))
     myel.text = sosomd['description']
     myel.set('lang','en')
     # temporal extent
-    tempcov = sosomd['temporalCoverage'].split('/')
-    myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'temporal_extent'))
-    myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'start_date'))
-    myel2.text = tempcov[0]
-    if tempcov[1]:
-        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
-        myel2.text = tempcov[1]
+    if 'temporalCoverage' in sosomd:
+        tempcov = sosomd['temporalCoverage'].split('/')
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'temporal_extent'))
+        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'start_date'))
+        myel2.text = tempcov[0]
+        if tempcov[1]:
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
+            myel2.text = tempcov[1]
+    else:
+        print('No temporal specification for dataset, skipping...')
+        return None
     # geographical extent - not working
     if 'box' in sosomd['spatialCoverage']['geo']:
         geobox = sosomd['spatialCoverage']['geo']['box'].split(' ')
         #print(geobox)
         #print(type(geobox))
-        myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'geographical_extent'))
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographical_extent'))
         myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
         # Need to be made more robust
         if 'CRS84' in sosomd['spatialCoverage']['additionalProperty'][0]['value']:
@@ -180,29 +185,30 @@ def sosomd2mmd(sosomd):
             continue
         if 'EARTH SCIENCE' in kw.upper():
             if 'myelgcmd' not in locals():
-                myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'keywords'))
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
                 myel.set('vocabulary','GCMDSK')
             myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
             myelgcmd.text = kw.strip()
         elif 'IN SITU/LABORATORY INSTRUMENTS' in kw.upper():
             continue # while testing
             if 'myplatform' not in locals():
-                myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'keywords'))
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
                 myel.set('vocabulary','GCMDSK')
             myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
             myelgcmd.text = kw.strip()
         else:
             if 'myelnone' not in locals():
-                myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'keywords'))
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
                 myel.set('vocabulary','none')
             myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
             myelgcmd.text = kw.strip()
     # related_information
-    myel = ET.SubElement(root,ET.QName(ns_map['mmd'],'related_information'))
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_information'))
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'type'))
     myel2.text = "Dataset landing page"
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
     myel2.text = sosomd['url']
+    print(ET.tostring(myroot))
     # personnel
     # sosomd['creator'] type og name
     # data centre
@@ -210,7 +216,7 @@ def sosomd2mmd(sosomd):
     # license
     # sosomd['isAccessibleForFree'] true or false check...
 
-    return root
+    return myroot
 
 """
 Main program below - only for testing, to be integrated in harvester
