@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+#
+# Name:
+# add_platform
+#
+# Purpose:
+# Add a platform to a MMD dataset. This field can be repeated.
+#
+# Instrument is not supported yet.
+# 
+# Author:
+# Øystein Godøy, METNO/FOU, 2023-03-07
+#
+import sys
+import os
+import argparse
+import yaml
+import lxml.etree as ET
+from datetime import datetime
+import pytz
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+            description='Add MMD platform element to MMD records. '+
+            'For handling of multiple files run through find.')
+    parser.add_argument('cfgfile', type=str, help='Configuration file in YAML  with platform details')
+    parser.add_argument('infile', type=str, help='File to update')
+    parser.add_argument('-a','--append', action='store_true', help='Add element field even if it exists.')
+    parser.add_argument('-o','--overwrite', action='store_true', help='Overwrite existing element field (i.e. replace).')
+    try:
+        args = parser.parse_args()
+    except:
+        sys.exit()
+    return(args)
+
+def parse_platform(cfgfile):
+
+    with open(cfgfile,'r') as ymlfile:
+        platform = yaml.full_load(ymlfile)
+
+    return(platform)
+
+def add_platform(myfile, platform, overwrite, append):
+    # Read input file
+    try:
+        myxml = ET.parse(myfile)
+    except:
+        print("Couldn't parse input file",myfile)
+        raise
+
+    myroot = myxml.getroot()
+
+    # Find existing elements
+    myel =  myroot.find("mmd:platform", namespaces=myroot.nsmap)
+    if myel is not None and not append and not overwrite:
+        print('Already specified, not changing anything in ', myfile)
+        return
+
+    # Construct element
+    myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"platform"),nsmap=myroot.nsmap)
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'short_name')).text = platform['short_name']
+    ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'long_name')).text = platform['long_name']
+    if 'resource' in platform:
+        ET.SubElement(myp,ET.QName(myroot.nsmap['mmd'],'resource')).text = platform['resource']
+    if myel is not None:
+        myel.addnext(myp)
+        if overwrite:
+            print('Replacing existing element in ', myfile)
+            myel.getparent().remove(myel)
+    else:
+        myel =  myroot.find("mmd:collection", namespaces=myroot.nsmap)
+        myel.addnext(myp)
+
+    # Dump results to file
+    #myxml.write('myfile.xml', pretty_print=True)
+    myxml.write(myfile, pretty_print=True)
+
+    return
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    try:
+        args = parse_arguments()
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    if args.overwrite and args.append:
+        print('Both overwrite and append is not supported as simultaneous commands yet.')
+        sys.exit()
+
+    # Parse YAML file with platform details
+    try:
+        platform = parse_platform(args.cfgfile)
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    # Process file
+    try:
+        add_platform(args.infile, platform, args.overwrite, args.append)
+    except Exception as e:
+        print(e)
+        sys.exit()
+
