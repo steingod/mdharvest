@@ -40,19 +40,21 @@ def add_os(myfile, os, overwrite):
     myroot = myxml.getroot()
 
     # Find existing elements
-    myel =  myroot.find("mmd:operational_status", namespaces=myroot.nsmap)
+    myels =  myroot.findall("mmd:operational_status", namespaces=myroot.nsmap)
 
     # Construct element
     myp = ET.Element(ET.QName(myroot.nsmap['mmd'],"operational_status"),nsmap=myroot.nsmap)
     myp.text = os
-    if myel is not None:
-        myel.addprevious(myp)
-        if overwrite:
-            print('Replacing existing element in ', myfile)
-            myel.getparent().remove(myel)
+    if myels:
+        for el in myels:
+            el.addnext(myp)
+            if overwrite:
+                print('Replacing existing element in ', myfile)
+                el.getparent().remove(el)
     else:
+        print('No previous element found, adding now...')
         myel =  myroot.find("mmd:collection", namespaces=myroot.nsmap)
-        myel.addprevious(myp)
+        myel.addnext(myp)
 
     # Dump results to file
     myxml.write(myfile, pretty_print=True)
