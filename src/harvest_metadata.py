@@ -95,6 +95,7 @@ def setInactive(mmdDir, mmdid, mylog):
 
     # Create filename from id
     mmdfile = '/'.join([mmdDir, mmdid.replace('.','_')+'.xml'])
+    print('>>>>>>>>>>', mmdfile)
 
     # Check if file exists
     if os.path.exists(mmdfile):
@@ -428,7 +429,8 @@ class MetadataHarvester(object):
 
         myns = {
                 'oai':'http://www.openarchives.org/OAI/2.0/',
-                'dif':'http://gcmd.gsfc.nasa.gov/Aboutus/xml/dif/'
+                'dif':'http://gcmd.gsfc.nasa.gov/Aboutus/xml/dif/',
+                'xsi':'http://www.w3.org/2001/XMLSchema-instance'
                 }
         record_elements =  dom.xpath('/oai:OAI-PMH/oai:ListRecords/oai:record', 
                 namespaces=myns)
@@ -451,8 +453,9 @@ class MetadataHarvester(object):
                         namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
                 # Need to add handling of deleted records,
                 # i.e. modify old records...
-                # Cahallenges arise when oaiid and difid are different as
+                # Challenges arise when oaiid and difid are different as
                 # difid is used as the filename...
+                # A rewrite to handle DIF10 nested ENTRY_ID element is needed.
                 if delete_status != None:
                     # TODO: Fix MMD records if record is deleted...
                     self.logger.info("This record has been deleted:\n\t%s",oaiid)
@@ -460,11 +463,22 @@ class MetadataHarvester(object):
                     mmdid = oaiid.split(':',3)[2]
                     # Update MMD record, i.e. set Inactive if existing
                     setInactive(self.mmdDir, mmdid, self.logger)
-                difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID',
-                        namespaces=myns)
+                #print(ET.tostring(record))
+                try:
+                    difschema = record.find('oai:metadata/dif:DIF', namespaces=myns).attrib('xsi:schemaLocation')
+                except:
+                    self.logger.error("Couldn't find DIF schema.")
+                try:
+                    if self.srcfmt == "dif_10":
+                        difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID/dif:Short_Name', namespaces=myns)
+                    else:
+                        difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID', namespaces=myns)
+                except:
+                    self.logger.error("Couldn't find the identifier...")
                 if difid == None:
                     self.logger.warn("Skipping record, no DIF ID")
                     continue
+                print('>>>> so far so good...')
                 difid = difid.text
                 difrec = record.find('oai:metadata/dif:DIF',
                         namespaces=myns)
@@ -579,7 +593,7 @@ class MetadataHarvester(object):
                         elif 'charset' in response.getheader('Content-Type'):
                             myencoding = response.getheader('Content-Type').split('=',1)[1] 
                         else:
-                            self.logger.warn('No Content-Type received from the server. Not sure why we ended up here.')
+                            self.logger.warn('No Content-Type received from the server. Not sure why we ended up here. Assuming UTF-8')
                             self.logger.warn('Header received: %s', response.getheader('Content-Type'))
                             myencoding = 'UTF-8'
                         #myfile = bytes(response.read())
