@@ -122,7 +122,7 @@ class LocalCheckMMD():
     def check_bounding_box(self,elements,root):
         #print("####",elements)
         if len(elements) > 1:
-            self.logger.warn("Found more than one element, not handling this now...")
+            self.logger.warning("Found more than one element, not handling this now...")
             return False
         #print(ET.tostring(elements[0],pretty_print=True))
         # Decode bounding box from XML
@@ -205,7 +205,7 @@ class LocalCheckMMD():
             elements = tree.findall("mmd:geographic_extent",
                     namespaces=mynsmap)
             if len(elements) != 1:
-                self.logger.warn("Error in bounding box (too few or too many)...")
+                self.logger.warning("Error in bounding box (too few or too many)...")
                 setInactive = True
             bboxfields = ['mmd:north','mmd:east','mmd:south','mmd:west']
             if tree.find('mmd:geographic_extent/mmd:rectangle',namespaces=root.nsmap) is not None:
@@ -218,7 +218,7 @@ class LocalCheckMMD():
                             if myvalue == None or myvalue.isspace():
                                 setInactive = True
             else:
-                self.logger.warn("No bounding box found in data.")
+                self.logger.warning("No bounding box found in data.")
                 setInactive = True
             # Check for multiple temporal periods
             # This should be removed as this is supported by the MMD
@@ -226,7 +226,7 @@ class LocalCheckMMD():
             elements = tree.findall("mmd:temporal_extent",
                     namespaces=mynsmap)
             if len(elements) != 1:
-                self.logger.warn("Too few or too many temporal extent elements...")
+                self.logger.warning("Too few or too many temporal extent elements...")
                 setInactive = True
             # Check DateTime strings (to be removed later)
             if not setInactive:
@@ -282,7 +282,7 @@ class LocalCheckMMD():
                 myel = '//mmd:collection[text()="'+item+'"]'
                 myelement = tree.xpath(myel, namespaces=mynsmap)
                 if myelement:
-                    self.logger.warn("Already belongs to %s",item)
+                    self.logger.warning("Already belongs to %s",item)
                     #tmpcoll.remove(item)
                 else:
                     # Add new collections
