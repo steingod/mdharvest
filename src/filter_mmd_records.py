@@ -196,9 +196,10 @@ class LocalCheckMMD():
         # Set all NPI records hosted by IMR for NMDC to inactive
         if self.section == "IMR":
             try:
-                myvalue = tree.find("mmd:data_center/mmd:data_center_name/mmd:long_name", namespaces=mynsmap).text
-                if myvalue in ["Norwegian Polar Institute"]:
-                    setInactive = True
+                myvalue = tree.find("mmd:data_center/mmd:data_center_name/mmd:long_name", namespaces=mynsmap)
+                if myvalue != None:
+                    if myvalue.text in ["Norwegian Polar Institute"]:
+                        setInactive = True
             except Exception as e:
                 self.logger.warning("%s didn't contain information on the data centre.", self.mmd_file)
         if not setInactive:
