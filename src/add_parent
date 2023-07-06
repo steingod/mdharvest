@@ -25,6 +25,8 @@ if __name__ == '__main__':
             help='UUID of parent record')
     parser.add_argument('infile', type=str, 
             help='File to update')
+    parser.add_argument('-o','--overwrite', action='store_true', help='Overwrite existing element field (i.e. replace).')
+    
     try:
         args = parser.parse_args()
     except:
@@ -39,13 +41,25 @@ if __name__ == '__main__':
         sys.exit()
 
     myroot = myxml.getroot()
+    
+    # Find existing elements
+    myel =  myroot.find("mmd:related_dataset", namespaces=myroot.nsmap)
+    if myel is not None and not args.overwrite:
+        print('Already specified, not changing anything in ', myfile)
+        sys.exit()
 
-    # Add related_dataset
-    mynode = ET.Element("{http://www.met.no/schema/mmd}related_dataset",
-            relation_type='parent')
+    # Create element to add
+    mynode = ET.Element("{http://www.met.no/schema/mmd}related_dataset", relation_type='parent')
     mynode.text = args.parentid
 
-    myroot.insert(-1, mynode)
+    # Add related_dataset
+    if myel is not None:
+        myel.addnext(mynode)
+        if args.overwrite:
+            print('Replacing existing element in ', args.infile)
+            myel.getparent().remove(myel)
+    else:
+        myroot.insert(-1, mynode)
 
     # Dump results to file
     myxml.write(args.infile, pretty_print=True)
