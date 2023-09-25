@@ -103,7 +103,7 @@ def process_files(xflg, myfiles, indir, outdir, mycollections, mytransform):
 
 def main(argv):
     # This is the main method
-    mydif = ['dif', 'gcmd']
+    mydif = ['dif', 'dif_10', 'gcmd']
     myiso = ['iso','iso19139','iso19115']
 
     # Parse command line arguments
@@ -174,11 +174,6 @@ def main(argv):
                     namespaces={
                         'xsl':'http://www.w3.org/1999/XSL/Transform',
                         'mmd':'http://www.met.no/schema/mmd'})
-            #myelement = myxslt.find(".//xsl:element[@name='mmd:collection']",
-            #        namespaces=myroot.nsmap)
-            #if myelement is None:
-            #    print "Can't find the requested element, bailing out"
-            #    sys.exit(2)
             if len(myelement) == 0:
                 mylog.error("Can't find the requested element, bailing out")
                 sys.exit(2)
