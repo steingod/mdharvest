@@ -206,7 +206,7 @@ class MetadataHarvester(object):
                 pageCounter += 1
 
             self.logger.info("Harvesting completed")
-            self.logger.info("Harvesting took: %s [h:mm:ss]", str(datetime.now()-start_time))
+            self.logger.info("Harvesting took: %s [hh:mm:ss]", str(datetime.now()-start_time))
             self.logger.info("Number of records successfully harvested: %d", self.numRecHarv)
 
         elif hProtocol == 'OGC-CSW':
@@ -463,22 +463,22 @@ class MetadataHarvester(object):
                     mmdid = oaiid.split(':',3)[2]
                     # Update MMD record, i.e. set Inactive if existing
                     setInactive(self.mmdDir, mmdid, self.logger)
-                #print(ET.tostring(record))
                 try:
-                    difschema = record.find('oai:metadata/dif:DIF', namespaces=myns).attrib('xsi:schemaLocation')
+                    dif = record.find('oai:metadata/dif:DIF', namespaces=myns)
+                    difschema = dif.xpath("@xsi:schemaLocation", namespaces=myns)
                 except:
-                    self.logger.error("Couldn't find DIF schema.")
-                try:
-                    if self.srcfmt == "dif_10":
-                        difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID/dif:Short_Name', namespaces=myns)
-                    else:
-                        difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID', namespaces=myns)
-                except:
-                    self.logger.error("Couldn't find the identifier...")
+                    self.logger.error("Couldn't find DIF schema, skipping record.")
+                    continue
+                """
+                Decide on handling depending on DIF 10 or previous type of record
+                """
+                if "dif_v10" in difschema[0]:
+                    difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID/dif:Short_Name', namespaces=myns)
+                else:
+                    difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID', namespaces=myns)
                 if difid == None:
                     self.logger.warn("Skipping record, no DIF ID")
                     continue
-                print('>>>> so far so good...')
                 difid = difid.text
                 difrec = record.find('oai:metadata/dif:DIF',
                         namespaces=myns)
