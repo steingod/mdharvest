@@ -47,8 +47,8 @@ def extract_metadata(url):
         return(None)
 
     # wait is before and sleep is after render is done
-    resp.html.render(wait=3, sleep=15)
-    print(resp.html.render(wait=3, sleep=15))
+    resp.html.render(wait=15, sleep=3)
+    print(resp.html.render(wait=15, sleep=3))
 
     # Extract information from HTML
     metadata = extruct.extract(resp.html.html, base_url=url)
@@ -60,6 +60,40 @@ def extract_metadata(url):
 
     # Beware, this may fail if invalid soso
     return metadata['json-ld'][0]
+
+def ccadiapicall(url, dstdir):
+    """
+    Designed for CCADI and PDC traversing (same API)
+    """
+    mystatus = 200
+    page = 0
+
+    while mystatus == 200:
+        myapi = url+"?page="+str(page)
+        print('>>> my api call: ', myapi)
+        mypage = requests.get(myapi)
+        print('Response code: ', mypage.status_code)
+        if mypage.status_code == 200:
+            print('Processing page... ', page)
+            mydoc = json.loads(mypage.text)
+            print(type(mydoc))
+            print(len(mydoc))
+            #print(json.dumps(mydoc, indent=4))
+            print(mydoc.keys())
+            for el in mydoc['itemListElement']:
+                print('=========')
+                mmd = sosomd2mmd(el['item'])
+                if mmd == None:
+                    print('Record is not complete and is skipped...')
+                    continue
+                # Dump MMD file
+                output_file = 'mytestfile.xml' # while testing...
+                #output_file = sosomd['identifier']
+                et = ET.ElementTree(mmd)
+                et.write(output_file, pretty_print=True)
+            page += 1
+            if page > 0:
+                sys.exit()
 
 def traversesite(url, dstdir):
     """
@@ -103,7 +137,7 @@ def traversesite(url, dstdir):
 def sosomd2mmd(sosomd):
 
     print('Now in sosomd2mmd...')
-    print(sosomd)
+    print(json.dumps(sosomd,indent=4))
 
     # Create XML file with namespaces
     ET.register_namespace('mmd',"http://www.met.no/schema/mmd")
@@ -116,7 +150,21 @@ def sosomd2mmd(sosomd):
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_identifier'))
     # Only valid for GEM
     #myel.text = sosomd['identifier']['value']
-    myel.text = sosomd['identifier']
+    mykeys = sosomd.keys()
+    print(mykeys)
+    print(sosomd['url'])
+    if 'identifier' in mykeys:
+        if 'value' in sosomd['identifier'].keys():
+            myel.text = sosomd['identifier']['value']
+        else:
+            myel.text = sosomd['identifier']
+    elif 'url' in mykeys:
+        if 'PDCSearch' in sosomd['url']:
+            myel.text = "PDC-"+sosomd['url'].split("=",1)[1]
+    else:
+        print('Cannot retrieve identifier...')
+        sys.exit()
+
     # metadata update
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'last_metadata_update'))
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
@@ -145,6 +193,7 @@ def sosomd2mmd(sosomd):
     myel.text = sosomd['description']
     myel.set('lang','en')
     # temporal extent
+    # need to reformat strings to match mmd
     if 'temporalCoverage' in sosomd:
         tempcov = sosomd['temporalCoverage'].split('/')
         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'temporal_extent'))
@@ -157,6 +206,7 @@ def sosomd2mmd(sosomd):
         print('No temporal specification for dataset, skipping...')
         return None
     # geographical extent - not working
+    # for PDC this reverts lat/lon
     if 'box' in sosomd['spatialCoverage']['geo']:
         geobox = sosomd['spatialCoverage']['geo']['box'].split(' ')
         #print(geobox)
@@ -164,10 +214,11 @@ def sosomd2mmd(sosomd):
         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographical_extent'))
         myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
         # Need to be made more robust
-        if 'CRS84' in sosomd['spatialCoverage']['additionalProperty'][0]['value']:
-            myel.set('srsName','EPSG;4326')
-        else:
-            myel.set('srsName','EPSG;4326')
+        if 'additionalProperty' in sosomd['spatialCoverage']:
+            if 'CRS84' in sosomd['spatialCoverage']['additionalProperty'][0]['value']:
+                myel.set('srsName','EPSG;4326')
+            else:
+                myel.set('srsName','EPSG;4326')
         myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'north'))
         myel3.text = geobox[3]
         myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'south'))
@@ -179,7 +230,9 @@ def sosomd2mmd(sosomd):
     else:
         print('Only supporting bounding boxes for now')
     # keywords are separated by ','.
-    mykws = sosomd['keywords'].split(',')
+    # failing here now Øystein Godøy, METNO/FOU, 2023-11-02  for pdc
+    #mykws = sosomd['keywords'].split(',')
+    mykws = sosomd['keywords']
     for kw in mykws:
         if 'UNKNOWN' in kw.upper():
             continue
@@ -208,7 +261,7 @@ def sosomd2mmd(sosomd):
     myel2.text = "Dataset landing page"
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
     myel2.text = sosomd['url']
-    print(ET.tostring(myroot))
+    print(ET.tostring(myroot, pretty_print=True, encoding='unicode'))
     # personnel
     # sosomd['creator'] type og name
     # data centre
@@ -234,16 +287,25 @@ if __name__ == '__main__':
             help='URL to sitemap')
     parser.add_argument('dstdir', type=str, 
             help='Directory where to put MMD files')
+    parser.add_argument('-c', '--ccadi-api', dest='ccadiapi', action='store_true')
     try:
         args = parser.parse_args()
     except:
         parser.print_help()
         sys.exit()
     
-    try:
-        traversesite(args.starturl, args.dstdir)
-    except Exception as e:
-        print('Something went wrong:', e)
-        sys.exit()
+    print('>>> ', args.ccadiapi)
+    if args.ccadiapi:
+        try:
+            ccadiapicall(args.starturl, args.dstdir)
+        except Exception as e:
+            print('Something went wrong:', e)
+            sys.exit()
+    else:
+        try:
+            traversesite(args.starturl, args.dstdir)
+        except Exception as e:
+            print('Something went wrong:', e)
+            sys.exit()
 
     sys.exit()
