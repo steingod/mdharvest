@@ -469,10 +469,12 @@ class MetadataHarvester(object):
                 except:
                     self.logger.error("Couldn't find DIF schema, skipping record.")
                     continue
+                print('So far so good...3')
+                print(difschema)
                 """
                 Decide on handling depending on DIF 10 or previous type of record
                 """
-                if "dif_v10" in difschema[0]:
+                if len(difschema) > 0 and "dif_v10" in difschema[0]:
                     difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID/dif:Short_Name', namespaces=myns)
                 else:
                     difid = record.find('oai:metadata/dif:DIF/dif:Entry_ID', namespaces=myns)
