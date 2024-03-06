@@ -178,14 +178,16 @@ class MetadataHarvester(object):
 
             self.logger.info("Resumption token found: %s",resumptionToken)
 
-            # Manage resumptionToken, i.e. segmentation of results in
-            # pages
+            """
+            Manage resumptionToken, i.e. segmentation of results in pages
+            """
             while resumptionToken != None:
                 self.logger.info("\n\tHandling resumptionToken number: %d", pageCounter)
                 # create resumptionToken URL parameter
                 #resumptionToken = urlencode({'resumptionToken':resumptionToken})
                 resumptionToken = 'resumptionToken='+resumptionToken
-                getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
+                ##getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
+                getRecordsURLLoop = str(getRecordsURL+'&'+resumptionToken)
                 self.logger.info("\n\tURL request: %s",getRecordsURLLoop)
                 #print(type(getRecordsURLLoop))
                 myxml = self.harvestContent(getRecordsURLLoop)
@@ -628,7 +630,7 @@ class MetadataHarvester(object):
     def oaipmh_resumptionToken(self,URL):
         # Not used currently, to be removed?
         """ Function for handling resumptionToken in OAI-PMH"""
-        #print "Now in resumptionToken..."
+        #print("Now in resumptionToken...", URL)
         try:
             file = ul.request.urlopen(URL, timeout=300)
             data = file.read()
