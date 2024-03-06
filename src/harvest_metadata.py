@@ -95,7 +95,7 @@ def setInactive(mmdDir, mmdid, mylog):
 
     # Create filename from id
     mmdfile = '/'.join([mmdDir, mmdid.replace('.','_')+'.xml'])
-    print('>>>>>>>>>>', mmdfile)
+    #print('>>>>>>>>>>', mmdfile)
 
     # Check if file exists
     if os.path.exists(mmdfile):
@@ -469,8 +469,6 @@ class MetadataHarvester(object):
                 except:
                     self.logger.error("Couldn't find DIF schema, skipping record.")
                     continue
-                print('So far so good...3')
-                print(difschema)
                 """
                 Decide on handling depending on DIF 10 or previous type of record
                 """
@@ -487,6 +485,7 @@ class MetadataHarvester(object):
 
                 # Dump to file
                 counter += 1
+                print('>>>> Processing file #: ', counter)
                 self.write_to_file(difrec, difid)
         else:
             self.logger.info("\n\tRecords did not contain DIF elements")
@@ -567,6 +566,7 @@ class MetadataHarvester(object):
         filename = self.outputDir+'/'+myid+'.xml'
         outputstr = ET.ElementTree(record)
         try:
+            self.logger.info('Creating file: %s', filename)
             outputstr.write(filename, pretty_print=True,
                     xml_declaration=True, standalone=None, 
                     encoding="UTF-8")
@@ -594,6 +594,9 @@ class MetadataHarvester(object):
                             myencoding = 'UTF-8'
                         elif 'charset' in response.getheader('Content-Type'):
                             myencoding = response.getheader('Content-Type').split('=',1)[1] 
+                        elif 'application/xml' in response.getheader('Content-Type'):
+                            self.logger.warn('No charset provided, assuming UTF-8')
+                            myencoding = 'UTF-8'
                         else:
                             self.logger.warn('No Content-Type received from the server. Not sure why we ended up here. Assuming UTF-8')
                             self.logger.warn('Header received: %s', response.getheader('Content-Type'))
