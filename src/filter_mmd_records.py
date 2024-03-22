@@ -62,6 +62,8 @@ def parse_arguments():
     parser.add_argument("-s","--sios",help="Checks bounding box and adds SIOS collection.", action='store_true')
     parser.add_argument("-i","--infranor",help="Checks project affiliation and adds InfraNOR collection.", action='store_true')
     parser.add_argument("-n","--nmap",help="Checks project affiliation and adds NMAP collection.", action='store_true')
+    parser.add_argument("-m","--nysmac",help="Checks bounding box for NySMAC.", action='store_true')
+    parser.add_argument("-t","--tone",help="Checks bounding box for TONE.", action='store_true')
     parser.add_argument('-r','--sources',dest='sources',help='Comma separated list of sources (in config) to harvest',required=False)
 
     # Options a, g, i, n and s cannot be used simultaneously
@@ -346,11 +348,17 @@ def main(argv):
     elif args.nmap:
         project = "NORMAP"
         collection = "NMAP"
+    elif args.nysmac:
+        bounding = [79.11850,10.45540,78.72381,14.06356]
+        collection ="NySMAC"
+    elif args.tone:
+        project = ""
+        collection ="TONE"
 
     # Define collections to add
     if args.collection:
         collection = args.collection.split(',')
-    elif ((not args.sios) and (not args.gcw) and (not args.nmap) and (not args.aen) and (not args.infranor)):
+    elif ((not args.sios) and (not args.gcw) and (not args.nmap) and (not args.aen) and (not args.infranor) and (not args.tone) and (not args.nysmac)):
         collection = None
 
     # Read config file
