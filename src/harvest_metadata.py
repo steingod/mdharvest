@@ -186,8 +186,10 @@ class MetadataHarvester(object):
                 # create resumptionToken URL parameter
                 #resumptionToken = urlencode({'resumptionToken':resumptionToken})
                 resumptionToken = 'resumptionToken='+resumptionToken
-                ##getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
-                getRecordsURLLoop = str(getRecordsURL+'&'+resumptionToken)
+                if 'geonetwork' in baseURL:
+                    getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
+                else:
+                    getRecordsURLLoop = str(getRecordsURL+'&'+resumptionToken)
                 self.logger.info("\n\tURL request: %s",getRecordsURLLoop)
                 #print(type(getRecordsURLLoop))
                 myxml = self.harvestContent(getRecordsURLLoop)
