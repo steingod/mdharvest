@@ -122,11 +122,12 @@ class LocalCheckMMD():
             return False
 
     def check_bounding_box(self,elements,root):
+        print(">>>>>> Now in checking bounding box....")
         #print("####",elements)
         if len(elements) > 1:
             self.logger.warning("Found more than one element, not handling this now...")
             return False
-        #print(ET.tostring(elements[0],pretty_print=True))
+        print(ET.tostring(elements[0],pretty_print=True))
         # Decode bounding box from XML
         thisbb = []
         for el in elements:
