@@ -261,13 +261,22 @@ class Nc_to_mmd(object):
                 myel34 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'west'))
                 myel34.text = str(mycont)
 
-    # Add temporal
+    # Add temporal extent
+    # FIXME add proper logging
     def add_temporal_extent(self, myxmltree, mynsmap, ncin):
-        mystarttime = parse(getattr(ncin,'time_coverage_start'))
-        myendtime = parse(getattr(ncin,'time_coverage_end'))
+        try:
+            mystarttime = parse(getattr(ncin,'time_coverage_start'))
+        except Exception as e:
+            print('add_temporal_extent: Failed to get start time, ', e)
+        try:
+            myendtime = parse(getattr(ncin,'time_coverage_end'))
+        except Exception as e:
+            print('add_temporal_extent: Failed to get end time, ', e,' end time is not required, continuing without')
         myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'temporal_extent'))
-        ET.SubElement(myel, ET.QName(mynsmap['mmd'],'start_date')).text = mystarttime.strftime('%Y-%m-%dT%H:%M:%SZ')
-        ET.SubElement(myel, ET.QName(mynsmap['mmd'],'end_date')).text = myendtime.strftime('%Y-%m-%dT%H:%M:%SZ')
+        if 'mystarttime' in locals():
+            ET.SubElement(myel, ET.QName(mynsmap['mmd'],'start_date')).text = mystarttime.strftime('%Y-%m-%dT%H:%M:%SZ')
+        if 'myendttime' in locals():
+            ET.SubElement(myel, ET.QName(mynsmap['mmd'],'end_date')).text = myendtime.strftime('%Y-%m-%dT%H:%M:%SZ')
 
     # Add personnel, quite complex...
     # Creator is related to Principal investigator, contributor to technical contact and metadata author (no way to differentiate) and pubisher to data centre hosting data
