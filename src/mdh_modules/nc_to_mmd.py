@@ -125,7 +125,7 @@ class Nc_to_mmd(object):
         if 'summary_no' in global_attributes:
             self.add_abstractno(root, ns_map, ncin)
 
-        # Create metadata status. Default is active. Done above, rewrite... 
+        # Create metadata status. Default is active. Done above, rewrite...
         self.add_metadata_status(root, ns_map)
 
         # Create dataset production status. Default Not available
@@ -175,7 +175,7 @@ class Nc_to_mmd(object):
         # Extract platform
         if 'platform' in global_attributes:
             self.add_platform(root, ns_map, ncin, global_attributes)
-            
+
         # Extract spatial rep
         if 'spatial_representation' in global_attributes:
             self.add_spatial_representation(root, ns_map, ncin, global_attributes)
@@ -197,15 +197,10 @@ class Nc_to_mmd(object):
         if 'source' in global_attributes or 'activity_type' in global_attributes:
             self.add_activity_type(root, ns_map, ncin, global_attributes)
 
-        # Extract ISO topic category
-
-        # Set dataset production status?? Not supported by ACDD
 
         # Set operational status. This need specific care and checking for compliance
         if 'processing_level' in global_attributes or 'operational_status' in global_attributes:
             self.add_operational_status(root, ns_map, ncin, global_attributes)
-
-        # Set dataset_production_status. This is not supported by ACDD and is left empty for now.
 
         # Check if services should be parsed
         if self.parse_services:
