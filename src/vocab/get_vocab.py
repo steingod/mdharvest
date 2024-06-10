@@ -13,7 +13,7 @@ if __name__ == '__main__':
             prefix skos:<http://www.w3.org/2004/02/skos/core#>
             prefix text:<http://jena.apache.org/text#>
             prefix rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-            prefix owl:<http://www.w3.org/2002/07/owl#> 
+            prefix owl:<http://www.w3.org/2002/07/owl#>
             prefix dc:<http://purl.org/dc/terms/>'''
 
         vocabularies = '''select distinct ?concname FROM <https://vocab.met.no/mmd> WHERE {
@@ -22,9 +22,9 @@ if __name__ == '__main__':
             ?concept skos:prefLabel ?concname .
             }'''
 
-        try: 
+        try:
             fullvoc = ''
-            for collection in collections: 
+            for collection in collections:
                 #set up call to vocabno
                 vocabno.setQuery(prefixes + vocabularies % {'collection': collection})
                 vocabno.setReturnFormat(JSON)
@@ -50,7 +50,7 @@ if __name__ == '__main__':
         except:
             print('Error fetching MMD concepts: use last fetched vocabulary list!')
 
-        return 
+        return
 
     def lookup_license(list_identifiers,vocabno):
 
@@ -211,21 +211,21 @@ if __name__ == '__main__':
     def main(voc):
         vocabno = SPARQLWrapper("https://vocab.met.no/skosmos/sparql")
 
-        collections = ['Use Constraint', 
+        collections = ['Use Constraint',
                    'Access Constraint',
-                   'Activity Type', 
+                   'Activity Type',
                    'Operational Status',
-                   'Access Constraint', 
-                   'Collection Keywords', 
+                   'Access Constraint',
+                   'Collection Keywords',
                    'ISO Topic Category',
-                   'Dataset Production Status', 
+                   'Dataset Production Status',
                    'Related Information Types',
                    'Keywords Vocabulary']
         if voc == 'mmd':
             get_MMDvocab(collections, vocabno)
         if voc == 'cf':
             cfnames = get_cfnames(vocabno)
-        
+
     parser = argparse.ArgumentParser(description='Update controlled vocabularies: MMD and CF/GCMD')
     parser.add_argument('vocabulary_type',
                         choices = ['mmd','cf'],

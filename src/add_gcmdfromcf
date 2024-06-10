@@ -5,7 +5,7 @@
 #
 # Purpose:
 # Add a GCMDSK keyword to a MMD dataset if CFSTDN is present
-# 
+#
 # Author:
 # Lara Ferrighi, METNO/FOU, 2024-06-06
 #
@@ -13,7 +13,7 @@ import sys
 import os
 import argparse
 import lxml.etree as ET
-import vocab.CFGCMD 
+import vocab.CFGCMD
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
@@ -76,7 +76,7 @@ def add_gcmd(myfile,vocab, print_only):
             mygcmd.set('vocabulary','GCMDSK')
         for k in gcmds:
             ET.SubElement(mygcmd,ET.QName(myroot.nsmap['mmd'],'keyword')).text = k
-    
+
         if print_only is not True:
             mycfs.addnext(mygcmd)
             ET.indent(myroot, space="  ")
