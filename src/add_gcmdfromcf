@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+#
+# Name:
+# add_activity_type
+#
+# Purpose:
+# Add a GCMDSK keyword to a MMD dataset if CFSTDN is present
+# 
+# Author:
+# Lara Ferrighi, METNO/FOU, 2024-06-06
+#
+import sys
+import os
+import argparse
+import lxml.etree as ET
+import vocab.CFGCMD 
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+            description='Add MMD GCMDSK element to MMD records.')
+    parser.add_argument('infile', type=str, help='File to update')
+    parser.add_argument('-p','--print_only', action='store_true', help='Print only matching GCMD keywords')
+
+    try:
+        args = parser.parse_args()
+    except:
+        sys.exit()
+    return(args)
+
+def add_gcmd(myfile,vocab, print_only):
+    # Read input file
+    try:
+        myxml = ET.parse(myfile)
+    except:
+        print("Couldn't parse input file",myfile)
+        raise
+
+    myroot = myxml.getroot()
+
+    # Find existing elements
+    myel =  myroot.find("mmd:keywords[@vocabulary='GCMDSK']", namespaces=myroot.nsmap)
+    if myel is not None and len(myel.getchildren()) > 0:
+        #print(ET.tostring(myel))
+        print('Already specified, not changing anything in ', myfile)
+        return
+
+    # get GCMD from CF
+    gcmds = []
+    mycfs =  myroot.find("mmd:keywords[@vocabulary='CFSTDN']", namespaces=myroot.nsmap)
+    if mycfs is not None:
+        for child in list(mycfs):
+            if child.text in vocab.CFGCMD.CFNAMES:
+                if len(vocab.CFGCMD.CFNAMES[child.text]['close']) > 0:
+                    if len(vocab.CFGCMD.CFNAMES[child.text]['close']) > 1:
+                        print("There is more than one close match for "+child.text+". You might want to assess the more appropriate.")
+                    for i in vocab.CFGCMD.CFNAMES[child.text]['close']:
+                        print(child.text+': '+i)
+                        gcmds.append(i)
+                elif len(vocab.CFGCMD.CFNAMES[child.text]['broad']) > 0:
+                    for i in vocab.CFGCMD.CFNAMES[child.text]['broad']:
+                        print(child.text+': '+i)
+                        gcmds.append(i)
+                else:
+                    print('Could not find matching GCMD for: ', child.text)
+            else:
+                print('There is no standard name: ', child.text)
+    else:
+        print('Could not find any CF standard names in MMD')
+
+    # Construct element
+    if len(gcmds) > 0:
+        if myel is not None and len(myel.getchildren()) == 0:
+            mygcmd = myel
+        else:
+            mygcmd = ET.Element(ET.QName(myroot.nsmap['mmd'],"keywords"),nsmap=myroot.nsmap)
+            mygcmd.set('vocabulary','GCMDSK')
+        for k in gcmds:
+            ET.SubElement(mygcmd,ET.QName(myroot.nsmap['mmd'],'keyword')).text = k
+    
+        if print_only is not True:
+            mycfs.addnext(mygcmd)
+            ET.indent(myroot, space="  ")
+            myxml.write(myfile, pretty_print=True)
+        else:
+            print('Keywords found: ', gcmds)
+
+    return
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    try:
+        args = parse_arguments()
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    # Process file
+    try:
+        add_gcmd(args.infile, vocab, args.print_only)
+    except Exception as e:
+        print(e)
+        sys.exit()
+
