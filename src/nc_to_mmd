@@ -3,6 +3,8 @@ import argparse
 import sys
 
 from mdh_modules.nc_to_mmd import main
+import vocab.ControlledVocabulary
+import vocab.CFGCMD
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -28,6 +30,6 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit()
 
-    main(input_file=args.input_file, output_path=args.output_path,
+    main(input_file=args.input_file, output_path=args.output_path, vocabulary=vocab,
             parse_services=args.parse_services, parse_wmslayers=args.parse_wms_layers, print_file=True)
 

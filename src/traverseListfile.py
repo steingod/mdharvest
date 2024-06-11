@@ -18,6 +18,8 @@ from mdh_modules.nc_to_mmd import Nc_to_mmd
 #from mmd_utils import nc_to_mmd
 import lxml.etree as ET
 from datetime import datetime
+import vocab.ControlledVocabulary
+import vocab.CFGCMD
 import pytz
 import uuid
 import validators
@@ -50,7 +52,7 @@ def traverse_listfile(mylist, dstdir, parse_services=False):
             newrec = rec
         outfile = os.path.splitext(os.path.basename(newrec))[0]+'.xml'
         try:
-            md = Nc_to_mmd(dstdir, outfile, str(newrec), parse_services, False, False)
+            md = Nc_to_mmd(dstdir, outfile, str(newrec), vocab, parse_services, False, False)
         except Exception as e:
             print('Something failed setting up ACDD extraction', e)
             continue
@@ -153,55 +155,55 @@ def modifyMMD(myxml, checkId=False, collections=None, thredds=False):
         # Add related_information
         related_information = ET.Element(
                 "{http://www.met.no/schema/mmd}related_information")
-        related_information_resource = ET.SubElement(related_information,
-                '{http://www.met.no/schema/mmd}resource')
-        related_information_resource.text = ds.url.replace('xml','html')
         related_information_type = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}type')
         related_information_type.text = 'Dataset landing page'
         related_information_description = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}description')
         related_information_description.text = 'Dataset landing page'
+        related_information_resource = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}resource')
+        related_information_resource.text = ds.url.replace('xml','html')
         myroot.insert(-1,related_information)
 
         # Add data_access (not done automatically)
         data_access = ET.Element(
                 '{http://www.met.no/schema/mmd}data_access')
-        data_access_resource = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}resource')
-        data_access_resource.text = ds.download_url()
         data_access_type = ET.SubElement(data_access,
                 '{http://www.met.no/schema/mmd}type')
         data_access_type.text = 'HTTP'
         data_access_description = ET.SubElement(data_access,
                 '{http://www.met.no/schema/mmd}description')
         data_access_description.text = 'Direct download of datafile'
+        data_access_resource = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}resource')
+        data_access_resource.text = ds.download_url()
         myroot.insert(-1,data_access)
 
         data_access = ET.Element(
                 '{http://www.met.no/schema/mmd}data_access')
-        data_access_resource = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}resource')
-        data_access_resource.text = ds.opendap_url()
         data_access_type = ET.SubElement(data_access,
                 '{http://www.met.no/schema/mmd}type')
         data_access_type.text = 'OPeNDAP'
         data_access_description = ET.SubElement(data_access,
                 '{http://www.met.no/schema/mmd}description')
         data_access_description.text = 'OPeNDAP access to dataset'
+        data_access_resource = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}resource')
+        data_access_resource.text = ds.opendap_url()
         myroot.insert(-1,data_access)
 
         data_access = ET.Element(
                 '{http://www.met.no/schema/mmd}data_access')
-        data_access_resource = ET.SubElement(data_access,
-                '{http://www.met.no/schema/mmd}resource')
-        data_access_resource.text = ds.wms_url()
         data_access_type = ET.SubElement(data_access,
                 '{http://www.met.no/schema/mmd}type')
         data_access_type.text = 'OGC WMS'
         data_access_description = ET.SubElement(data_access,
                 '{http://www.met.no/schema/mmd}description')
         data_access_description.text = 'OGC WMS GetCapabilities URL'
+        data_access_resource = ET.SubElement(data_access,
+                '{http://www.met.no/schema/mmd}resource')
+        data_access_resource.text = ds.wms_url()
         myroot.insert(-1,data_access)
 
     return(myxml)
