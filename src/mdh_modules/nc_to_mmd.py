@@ -24,7 +24,7 @@ import json
 
 class Nc_to_mmd(object):
 
-    def __init__(self, output_path, output_name, netcdf_product,
+    def __init__(self, output_path, output_name, netcdf_product, vocabulary,
             parse_services=False, parse_wmslayers=False, print_file=False):
         """
         Class for creating an MMD XML file based on the discovery metadata provided in the global attributes of NetCDF
@@ -46,6 +46,14 @@ class Nc_to_mmd(object):
         self.parse_services = parse_services
         self.parse_wmslayers = parse_wmslayers
         self.print_file = print_file
+        self.vocabulary = vocabulary
+
+    def iscfstdn(self, cfname, cf_lookup):
+        if cfname in cf_lookup:
+            incf = True
+        else:
+            incf = False
+        return incf
 
     def to_mmd(self):
         """
@@ -63,6 +71,31 @@ class Nc_to_mmd(object):
         global_attributes = ncin.ncattrs()
         all_netcdf_variables = [var for var in ncin.variables]
 
+        #extract cf names
+
+        cf_candidate = []
+        cf_standard_names = []
+        no_cfnames = []
+        for k in ncin.variables.keys():
+            try:
+                if ncin.variables[k].standard_name not in cf_candidate:
+                    cf_candidate.append(ncin.variables[k].standard_name)
+            except:
+                no_cfnames.append(k)
+        if len(no_cfnames) > 0:
+            print('no standard name found for', no_cfnames)
+
+        rem_var = ['latitude', 'longitude', 'time']
+        for var in rem_var:
+            if var in cf_candidate:
+                cf_candidate.remove(var)
+
+        for cfc in cf_candidate:
+            iscf = self.iscfstdn(cfc, self.vocabulary.CFGCMD.CFNAMES)
+            if iscf:
+                cf_standard_names.append(cfc)
+        #print(cf_standard_names)
+
         # Create XML file with namespaces
         ns_map = {'mmd': "http://www.met.no/schema/mmd",
                   'xml': "http://www.w3.org/XML/1998/namespace"}
@@ -76,8 +109,29 @@ class Nc_to_mmd(object):
         if 'id' in global_attributes:
             self.add_identifier(root, ns_map, ncin, global_attributes)
 
-        # Create metadata status. Default is active. Done above, rewrite... 
+        # Extract collection?? Not supported by ACDD, add afterwards using filter records from harvester. To be reconsidered in the future.
+
+        # Extract title
+        if 'title' in global_attributes:
+            self.add_title(root, ns_map, ncin)
+
+        # Extract title norwegian
+        if 'title_no' in global_attributes:
+            self.add_titleno(root, ns_map, ncin)
+
+        # Extract abstract
+        if 'summary' in global_attributes:
+            self.add_abstract(root, ns_map, ncin)
+
+        # Extract abstract norwegian
+        if 'summary_no' in global_attributes:
+            self.add_abstractno(root, ns_map, ncin)
+
+        # Create metadata status. Default is active. Done above, rewrite...
         self.add_metadata_status(root, ns_map)
+
+        # Create dataset production status. Default Not available
+        self.add_dataset_production_status(root, ns_map)
 
         # Extract last metadata update. Multiple elements to process. Check both date_created and date_metadata_modified
         if 'date_created' in global_attributes:
@@ -90,23 +144,20 @@ class Nc_to_mmd(object):
             ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Created'
             ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'Automatically generated from ACDD elements'
 
-        # Extract collection?? Not supported by ACDD, add afterwards using filter records from harvester. To be reconsidered in the future.
+        # Extract temporal extent
+        if 'time_coverage_start' in global_attributes and 'time_coverage_end' in global_attributes:
+            self.add_temporal_extent(root, ns_map, ncin)
 
-        # Extract title
-        if 'title' in global_attributes:
-            self.add_title(root, ns_map, ncin)
+        # Extract ISO topic category
+        self.add_iso_topic_category(root, ns_map, ncin, global_attributes)
 
-        # Extract abstract
-        if 'summary' in global_attributes:
-            self.add_abstract(root, ns_map, ncin)
+        # Extract keywords, need to parse both keywords and keywords_vocabulary
+        if 'keywords' in global_attributes:
+            self.add_keywords(root,ns_map,ncin, global_attributes, cf_standard_names)
 
         # Extract geographic extent
         if 'geospatial_lat_max' in global_attributes and 'geospatial_lat_min' in global_attributes and 'geospatial_lon_max' in global_attributes and 'geospatial_lon_min' in global_attributes:
             self.add_geographic_extent(root, ns_map, ncin, global_attributes)
-
-        # Extract temporal extent
-        if 'time_coverage_start' in global_attributes and 'time_coverage_end' in global_attributes:
-            self.add_temporal_extent(root, ns_map, ncin)
 
         # Extract personnel. Need to extract multiple fields.
         self.add_personnel(root, ns_map, ncin, global_attributes)
@@ -119,10 +170,6 @@ class Nc_to_mmd(object):
         if 'license' in global_attributes:
             self.add_use_constraint(root, ns_map, ncin)
 
-        # Extract keywords, need to parse both keywords and keywords_vocabulary
-        if 'keywords' in global_attributes:
-            self.add_keywords(root,ns_map,ncin, global_attributes)
-
         # Extract project
         if 'project' in global_attributes:
             self.add_project(root, ns_map, ncin)
@@ -130,7 +177,11 @@ class Nc_to_mmd(object):
         # Extract platform
         if 'platform' in global_attributes:
             self.add_platform(root, ns_map, ncin, global_attributes)
-            
+
+        # Extract spatial rep
+        if 'spatial_representation' in global_attributes:
+            self.add_spatial_representation(root, ns_map, ncin, global_attributes)
+
         # Add related_information. There is currently no relevant ACDD element to process here.
 
         # Add related_dataset. There is currently no relevant ACDD element to process here.
@@ -145,7 +196,7 @@ class Nc_to_mmd(object):
         # Extract related information?? This is not directly supported in ACDD.
 
         # Extract activity type. Relying on the ACDD element source or local extension
-        if 'source' in global_attributes:
+        if 'source' in global_attributes or 'activity_type' in global_attributes:
             self.add_activity_type(root, ns_map, ncin, global_attributes)
 
         # Extract WIGOS links
@@ -159,8 +210,6 @@ class Nc_to_mmd(object):
         # Set operational status. This need specific care and checking for compliance
         if 'processing_level' in global_attributes or 'operational_status' in global_attributes:
             self.add_operational_status(root, ns_map, ncin, global_attributes)
-
-        # Set dataset_production_status. This is not supported by ACDD and is left empty for now.
 
         # Check if services should be parsed
         if self.parse_services:
@@ -198,6 +247,10 @@ class Nc_to_mmd(object):
     def add_metadata_status(self, myxmltree, mynsmap):
         ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'metadata_status')).text = 'Active'
 
+
+    def add_dataset_production_status(self, myxmltree, mynsmap):
+        ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'dataset_production_status')).text = 'Not available'
+
     # Check both date_created and date_metadata_modified
     # FIXME add multiple updates
     def add_last_metadata_update(self, myxmltree, mynsmap, ncin, myattrs):
@@ -233,12 +286,24 @@ class Nc_to_mmd(object):
         myel.text = mytitle
         myel.set('{http://www.w3.org/XML/1998/namespace}lang','en')
 
+    def add_titleno(self, myxmltree, mynsmap, ncin):
+        mytitle = getattr(ncin, 'title_no')
+        myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'title'))
+        myel.text = mytitle
+        myel.set('{http://www.w3.org/XML/1998/namespace}lang','no')
+
     # Assuming english as default language
     def add_abstract(self, myxmltree, mynsmap, ncin):
         myabstract = getattr(ncin, 'summary')
         myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'abstract'))
         myel.text = myabstract
         myel.set('{http://www.w3.org/XML/1998/namespace}lang','en')
+
+    def add_abstractno(self, myxmltree, mynsmap, ncin):
+        myabstract = getattr(ncin, 'summary_no')
+        myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'abstract'))
+        myel.text = myabstract
+        myel.set('{http://www.w3.org/XML/1998/namespace}lang','no')
 
     # Add check and rewrite of longitudes.
     def add_geographic_extent(self, myxmltree, mynsmap, ncin, myattrs):
@@ -388,6 +453,7 @@ class Nc_to_mmd(object):
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[emlen-1].strip()
                     else:
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[i].strip()
+
                 if 'publisher_institution' in myattrs:
                     if i > inlen-1:
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[inlen-1].strip()
@@ -400,35 +466,94 @@ class Nc_to_mmd(object):
         myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'data_center'))
         if 'publisher_institution' in myattrs:
             myel2 = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'data_center_name'))
-            ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = getattr(ncin, 'publisher_institution')
             ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = ''
+            ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = getattr(ncin, 'publisher_institution')
         if 'publisher_url' in myattrs:
             ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'data_center_url')).text = getattr(ncin, 'publisher_url')
 
-    # Assuming either Free or None or a combination of a URL with an identifier included in parantheses. MMD relies on the SPDX approach of licenses with a n identifier and a resource (URL) for the lcense. License_text is supported to handle free text approaches.
-    # Add lookup on identifier in SPDX. spdx-lookup only returns text seemingly, not the URL
+    # Assuming either Free or None or a combination of a URL with an identifier included in parantheses.
+    #MMD relies on the SPDX approach of licenses with a n identifier and a resource (URL) for the lcense. License_text is supported to handle free text approaches.
+    # The lookup, from vocab.met.no, consists of a dictionary of type:
+    # UseConstraint = {'CC0-1.0': {'exactMatch': ['http://spdx.org/licenses/CC0-1.0', 'https://creativecommons.org/publicdomain/zero/1.0/'],
+    #                              'altLabel': ['Creative Commons Zero v1.0 Universal', 'CC0 1.0']},
+    #                  'CC-BY-4.0': {'exactMatch': ['http://spdx.org/licenses/CC-BY-4.0', 'https://creativecommons.org/licenses/by/4.0/'],
+    #                                'altLabel': ['Creative Commons Attribution 4.0 International', 'Attribution', 'CC BY 4.0']},
+    # where the key is the license ID, the value is a list of dictionaries with url of skos:exacthMatch and skos:altLabel.
+    # exactMatch can be used if other urls beside spdx are used, while altLabel can be used if text is used (this is the official
+    # name of CC licenses as well as common ways of using text).
     def add_use_constraint(self, myxmltree, mynsmap, ncin):
+        license_lookup = self.vocabulary.ControlledVocabulary.UseConstraint
         myurl = None
         mylicense = getattr(ncin, 'license')
         #print(mylicense)
-        # If formatted appropriately, extract information to MMD element.
+        # If formatted appropriately, extract information to MMD element. Examples of license:
+        # license: "http://spdx.org/licenses/CC-BY-4.0.html(CC-BY-4.0)" not that without space it is recognized as url.
+        # license: "http://spdx.org/licenses/CC-BY-4.0(CC-BY-4.0)"
+        # license: "http://spdx.org/licenses/CC-BY-4.0 (CC-BY-4.0)"
+        # license: "https://spdx.org/licenses/CC-BY-4.0 (CC-BY-4.0)"
+        # license: "https://creativecommons.org/licenses/by/4.0/ (CC-BY-4.0)"
+        # license: "https://creativecommons.org/licenses/by/4.0/"
+        # lincese: "Creative Commons Attribution 4.0 International"
+        # license: "CC BY 4.0"
+        #assume lincese: url (id)
         if '(' in mylicense and ')' in mylicense:
             mylid = re.search('\(.+\)', mylicense)
             myurl = mylicense.replace(mylid.group(),'').strip()
             mylid = mylid.group().lstrip('(').rstrip(')')
-            if not validators.url(myurl):
-                myurl = None
+            if mylid in license_lookup.keys():
+                licenseid = mylid
+                if myurl in license_lookup[mylid]['exactMatch'] and 'spdx' in myurl:
+                    licenseurl = myurl
+                elif myurl.replace('.html','').replace('https','http') in license_lookup[mylid]['exactMatch'] and 'spdx' in myurl.replace('.html','').replace('https','http'):
+                    licenseurl = myurl.replace('.html','').replace('https','http')
+                else:
+                    licenseurl = ''.join(i for i in license_lookup[mylid]['exactMatch'] if 'spdx' in i)
+            else:
                 mytext = mylicense
-            #print(mylid, myurl)
-        if validators.url(mylicense):
-            myurl = mylicense
-            mylid = 'NA' # FIXME, use identifier in parantheses
+                licenseid = None
+                licenseurl = None
+        #assume license: url
+        elif validators.url(mylicense):
+            #check it's valid from vocab
+            for k, v in license_lookup.items():
+                if mylicense in v['exactMatch']:
+                    licenseid = k
+                    if 'spdx' in mylicense:
+                        licenseurl = mylicense
+                    else:
+                        licenseurl = ''.join(i for i in license_lookup[licenseid]['exactMatch'] if 'spdx' in i)
+                    break
+                elif mylicense.replace('.html','').replace('https','http') in v['exactMatch']:
+                    if 'spdx' in mylicense.replace('.html','').replace('https','http'):
+                        licenseid = k
+                        licenseurl = mylicense.replace('.html','').replace('https','http')
+                    else:
+                        licenseid = k
+                        licenseurl = ''.join(i for i in license_lookup[licenseid]['exactMatch'] if 'spdx' in i)
+                    break
+                else:
+                    mytext = mylicense
+                    licenseid = None
+                    licenseurl = None
+        #assume only id
+        elif mylicense in license_lookup.keys():
+            licenseid = mylicense
+            licenseurl = ''.join(i for i in license_lookup[mylicense]['exactMatch'] if 'spdx' in i)
+        #assume only text
         else:
-            mytext = mylicense
+            mylid = ''.join(k for k, v in license_lookup.items() if mylicense in v['altLabel'])
+            if mylid != '':
+                licenseid = mylid
+                licenseurl = ''.join(i for i in license_lookup[licenseid]['exactMatch'] if 'spdx' in i)
+            else:
+                mytext = mylicense
+                licenseid = None
+                licenseurl = None
+
         myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'use_constraint'))
-        if myurl:
-            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'resource')).text = myurl
-            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'identifier')).text = mylid
+        if licenseid:
+            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'identifier')).text = licenseid
+            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'resource')).text = licenseurl
         else:
             ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'license_text')).text = mytext
 
@@ -437,11 +562,12 @@ class Nc_to_mmd(object):
     # Rewrite to extract from CF standard names later
     # Need to check if checking on GCMDLOC and GCMDPROV is required in the future and generate different keywords elements due to this
     # FIXME doesn't handle multiple lists yet
-    def add_keywords(self, myxmltree, mynsmap, ncin, myattrs):
+    def add_keywords(self, myxmltree, mynsmap, ncin, myattrs, cf_standard_names):
         # Consider to add valid_identifiers to a configuration file or to check acgainst a vocabulary
-        valid_identifiers = ['None', 'GCMDSK', 'GCMDLOC', 'CF']
+        valid_identifiers = self.vocabulary.ControlledVocabulary.KeywordsVocabulary
         mykeyw = getattr(ncin, 'keywords')
         # Set up MMD elements to fill with content
+        expectedgcmd = False
         if 'keywords_vocabulary' in myattrs:
             mykeyw_voc = getattr(ncin, 'keywords_vocabulary')
             # First handle multiple vocabularies
@@ -472,14 +598,21 @@ class Nc_to_mmd(object):
                     elif mykeyw_voc == 'GCMDSK':
                         mykwgcmdsk = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
                         mykwgcmdsk.set('vocabulary',mykeyw_voc)
+                        expectedgcmd = True
                     elif mykeyw_voc == 'GCMDLOC':
                         mykwgcmdloc = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
                         mykwgcmdloc.set('vocabulary',mykeyw_voc)
-                    elif mykeyw_voc == 'CF':
+                    elif mykeyw_voc == 'CFSTDN':
                         mykwcf = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
                         mykwcf.set('vocabulary',mykeyw_voc)
+                    elif mykeyw_voc == 'NORTHEMES':
+                        mykwnt = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
+                        mykwnt.set('vocabulary',mykeyw_voc)
+                    elif mykeyw_voc == 'GEMET':
+                        mykwgemet = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
+                        mykwgemet.set('vocabulary',mykeyw_voc)
                 # Special hack for IGPAS, should be removed later
-                if mykeyw_voc in 'GCMD_Keywords':
+                if mykeyw_voc in 'GCMD_Keywords' and expectedgcmd is False:
                     mykwgcmdsk = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
                     mykwgcmdsk.set('vocabulary','GCMDSK')
                 # Special hack for backwards compatibility for NIRD published data from UiT
@@ -494,7 +627,7 @@ class Nc_to_mmd(object):
         # Now we fill MMD keywords elements with content...
         ##myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
         tmp = getattr(ncin, 'keywords')
-        if re.search('Earth Science >',tmp,re.IGNORECASE):
+        if re.search('Earth Science >',tmp,re.IGNORECASE) and expectedgcmd is False:
             mykwgcmdsk = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
             mykwgcmdsk.set('vocabulary','GCMDSK')
         values = getattr(ncin,'keywords').split(',')
@@ -519,13 +652,24 @@ class Nc_to_mmd(object):
                 ET.SubElement(mykwgcmdsk, ET.QName(mynsmap['mmd'],'keyword')).text = kw
             elif myvoc == 'GCMDLOC':
                 ET.SubElement(mykwgcmdloc, ET.QName(mynsmap['mmd'],'keyword')).text = kw
-            elif myvoc == 'CF':
+            elif myvoc == 'CFSTDN':
                 ET.SubElement(mykwcf, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+            elif myvoc == 'NORTHEMES':
+                ET.SubElement(mykwnt, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+            elif myvoc == 'GEMET':
+                ET.SubElement(mykwgemet, ET.QName(mynsmap['mmd'],'keyword')).text = kw
             elif myvoc == 'None':
                 if re.match('Earth Science >',el,re.IGNORECASE):
                     ET.SubElement(mykwgcmdsk, ET.QName(mynsmap['mmd'],'keyword')).text = kw
                 else:
                     ET.SubElement(mykwnone, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+
+        if len(cf_standard_names) > 0:
+            mykwcf = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
+            mykwcf.set('vocabulary', 'CFSTDN')
+            for cf in cf_standard_names:
+                ET.SubElement(mykwcf, ET.QName(mynsmap['mmd'],'keyword')).text = cf
+
 
     def add_project(self, myxmltree, mynsmap, ncin):
         myprojects = getattr(ncin, 'project').split(',')
@@ -538,10 +682,10 @@ class Nc_to_mmd(object):
             else:
                 mylongname = el
                 myshortname = ''
-            myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
-            myel2.text = mylongname.strip()
             myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'short_name'))
             myel2.text = myshortname.strip()
+            myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
+            myel2.text = mylongname.strip()
 
     # Add platform, relies on controlled vocabulary in MMD, will read platform and platform_vocabulary from ACDD if the latter is present and map
     def add_platform(self, myxmltree, mynsmap, ncin, myattrs):
@@ -563,6 +707,11 @@ class Nc_to_mmd(object):
             valid_statements = []
             myel2.text = myplatform
 
+    def add_spatial_representation(self, myxmltree, mynsmap, ncin, myattrs):
+        myspatr = getattr(ncin, 'spatial_representation')
+        myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'spatial_representation'))
+        myel.text = myspatr
+
     # Add activity_type, relies on source and controlled vocabulary. If vocabulary isn't used leave open. Uses local extension if available
     def add_activity_type(self, myxmltree, mynsmap, ncin, myattrs):
         if 'activity_type' in myattrs:
@@ -571,10 +720,21 @@ class Nc_to_mmd(object):
             myactivity = getattr(ncin, 'source')
         myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'activity_type'))
         # Not added yet since MMD only relies on satellite data for now.
-        valid_statements = ['Aircraft', 'Space Borne Instrument','Numerical Simulation', 'Climate Indicator', 'In Situ Land-based station(Land station) (Field Experiment)', 'In Situ Ship-based station(Cruise)', 'In Situ Ocean fixed station(Moored instrument)', 'In Situ Ocean moving station(Float)', 'In Situ Ice-based station(Ice station) (Field Experiment)', 'Interview/Questionnaire(Interview) (Questionnaire)', 'Maps/Charts/Photographs(Maps) (Charts)(Photographs)']
+        valid_statements = self.vocabulary.ControlledVocabulary.ActivityType
         if myactivity in valid_statements:
             myel.text = myactivity
         else:
+            myel.text = 'Not available'
+
+    # Add iso_topic_category
+    def add_iso_topic_category(self, myxmltree, mynsmap, ncin, myattrs):
+        if 'iso_topic_category' in myattrs:
+            myisotopic = getattr(ncin, 'iso_topic_category').split(',')
+            for isot in myisotopic:
+                myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'iso_topic_category'))
+                myel.text = isot.strip()
+        else:
+            myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'iso_topic_category'))
             myel.text = 'Not available'
 
     def add_wigos_related_info(self, myxmltree, mynsmap, ncin, myattrs):
@@ -601,7 +761,7 @@ class Nc_to_mmd(object):
         if myoperstat == 'operational':
             myoperstat = 'Operational'
         myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'operational_status'))
-        valid_statements = ['Operational', 'Pre-Operational','Experimental', 'Scientific']
+        valid_statements = self.vocabulary.ControlledVocabulary.OperationalStatus
         if myoperstat in valid_statements:
             myel.text = myoperstat
         else:
@@ -685,7 +845,7 @@ class Nc_to_mmd(object):
                     res += '?service=WMS&version=1.3.0&request=GetCapabilities'
                 dacc_res.text = res
 
-def main(input_file=None, output_path='./',parse_services=False,parse_wmslayers=False, print_file=False):
+def main(input_file=None, output_path='./',vocabulary=None,parse_services=False,parse_wmslayers=False, print_file=False):
     """Run the the mdd creation from netcdf"""
 
     if input_file:
@@ -695,5 +855,5 @@ def main(input_file=None, output_path='./',parse_services=False,parse_wmslayers=
         output_name = 'multisensor_sic.xml'
         input_file = ('https://thredds.met.no/thredds/dodsC/sea_ice/'
                       'SIW-METNO-ARC-SEAICE_HR-OBS/ice_conc_svalbard_aggregated')
-    md = Nc_to_mmd(output_path, output_name, input_file, parse_services, parse_wmslayers, print_file)
+    md = Nc_to_mmd(output_path, output_name, input_file, vocabulary, parse_services, parse_wmslayers, print_file)
     md.to_mmd()
