@@ -17,6 +17,8 @@ import threddsclient
 from mdh_modules.nc_to_mmd import Nc_to_mmd
 import lxml.etree as ET
 from datetime import datetime
+import vocab.ControlledVocabulary
+import vocab.CFGCMD
 import pytz
 import uuid
 import re
@@ -57,7 +59,7 @@ def traverse_thredds(mystart, dstdir, mydepth):
         #print('>>>',ds)
         #print('>>>',ds.url)
         try:
-            md = Nc_to_mmd(dstdir, outfile, infile, False, False, False)
+            md = Nc_to_mmd(dstdir, outfile, infile, vocab, False, False, False)
         except Exception as e:
             print('Something failed setting up ACDD extraction', e)
             continue
@@ -169,93 +171,84 @@ def traverse_thredds(mystart, dstdir, mydepth):
 ##        mygchild3.text = 'Created automatically from traversing THREDDS server'
 ##        myroot.insert(5,mynode)
 
-        # Add collection
-        mynode = ET.Element("{http://www.met.no/schema/mmd}collection")
-        mynode.text = 'ADC'
-        myroot.insert(6,mynode)
-        mynode = ET.Element("{http://www.met.no/schema/mmd}collection")
-        mynode.text = 'NSDN'
-        myroot.insert(7,mynode)
-
-        # Add iso_topic_category
-        # Most datasets belong to this, quick hack for now
-        mynode = ET.Element("{http://www.met.no/schema/mmd}iso_topic_category")
-        mynode.text = 'Not available'
-        myroot.insert(8, mynode)
+        # Add collection after ds production status
+        dsstatus = myxml.find("./mmd:dataset_production_status",namespaces=myroot.nsmap)
+        mynodeadc = ET.Element("{http://www.met.no/schema/mmd}collection")
+        mynodeadc.text = 'ADC'
+        dsstatus.addnext(mynodeadc)
+        mynodensdn = ET.Element("{http://www.met.no/schema/mmd}collection")
+        mynodensdn.text = 'NSDN'
+        mynodeadc.addnext(mynodensdn)
 
         # Check and potentially modify activity_type
         mynode = myxml.find("./mmd:activity_type",namespaces=myroot.nsmap)
-        if mynode is not None:
-            mynode.text = 'Not available'
-        else:
+        if mynode is None:
             mynode = ET.Element("{http://www.met.no/schema/mmd}activity_type")
             mynode.text = 'Not available'
-        myroot.insert(9, mynode)
+            myroot.insert(-1, mynode)
 
         # Check and potentially modify operational_status
         mynode = myxml.find("./mmd:operational_status",namespaces=myroot.nsmap)
-        if mynode is not None:
-            mynode.text = 'Not available'
-        else:
+        if mynode is None:
             mynode = ET.Element("{http://www.met.no/schema/mmd}operational_status")
             mynode.text = 'Not available'
-        myroot.insert(9, mynode)
+            myroot.insert(-1, mynode)
 
         # Add related_information
         related_information = ET.Element(
                 "{http://www.met.no/schema/mmd}related_information")
-        related_information_resource = ET.SubElement(related_information,
-                '{http://www.met.no/schema/mmd}resource')
-        related_information_resource.text = ds.url.replace('xml','html')
         related_information_type = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}type')
         related_information_type.text = 'Dataset landing page'
         related_information_description = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}description')
         related_information_description.text = 'Dataset landing page'
+        related_information_resource = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}resource')
+        related_information_resource.text = ds.url.replace('xml','html')
         myroot.insert(-1,related_information)
 
         # Add data_access (not done automatically)
         if ds.download_url():
             data_access = ET.Element(
                     '{http://www.met.no/schema/mmd}data_access')
-            data_access_resource = ET.SubElement(data_access,
-                    '{http://www.met.no/schema/mmd}resource')
-            data_access_resource.text = ds.download_url()
             data_access_type = ET.SubElement(data_access,
                     '{http://www.met.no/schema/mmd}type')
             data_access_type.text = 'HTTP'
             data_access_description = ET.SubElement(data_access,
                     '{http://www.met.no/schema/mmd}description')
             data_access_description.text = 'Direct download of datafile'
+            data_access_resource = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}resource')
+            data_access_resource.text = ds.download_url()
             myroot.insert(-1,data_access)
 
         if ds.opendap_url():
             data_access = ET.Element(
                     '{http://www.met.no/schema/mmd}data_access')
-            data_access_resource = ET.SubElement(data_access,
-                    '{http://www.met.no/schema/mmd}resource')
-            data_access_resource.text = ds.opendap_url()
             data_access_type = ET.SubElement(data_access,
                     '{http://www.met.no/schema/mmd}type')
             data_access_type.text = 'OPeNDAP'
             data_access_description = ET.SubElement(data_access,
                     '{http://www.met.no/schema/mmd}description')
             data_access_description.text = 'OPeNDAP access to dataset'
+            data_access_resource = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}resource')
+            data_access_resource.text = ds.opendap_url()
             myroot.insert(-1,data_access)
 
         if ds.wms_url():
             data_access = ET.Element(
                     '{http://www.met.no/schema/mmd}data_access')
-            data_access_resource = ET.SubElement(data_access,
-                    '{http://www.met.no/schema/mmd}resource')
-            data_access_resource.text = ds.wms_url()
             data_access_type = ET.SubElement(data_access,
                     '{http://www.met.no/schema/mmd}type')
             data_access_type.text = 'OGC WMS'
             data_access_description = ET.SubElement(data_access,
                     '{http://www.met.no/schema/mmd}description')
             data_access_description.text = 'OGC WMS GetCapabilities URL'
+            data_access_resource = ET.SubElement(data_access,
+                    '{http://www.met.no/schema/mmd}resource')
+            data_access_resource.text = ds.wms_url()
             myroot.insert(-1,data_access)
 
         # Reference should be removed
