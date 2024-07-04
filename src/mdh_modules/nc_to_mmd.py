@@ -19,6 +19,8 @@ import sys
 import os
 import re
 import validators
+import urllib.request as ul
+import json
 
 class Nc_to_mmd(object):
 
@@ -197,6 +199,13 @@ class Nc_to_mmd(object):
         if 'source' in global_attributes or 'activity_type' in global_attributes:
             self.add_activity_type(root, ns_map, ncin, global_attributes)
 
+        # Extract WIGOS links
+        if 'wigosId' in global_attributes:
+            self.add_wigos_related_info(root, ns_map, ncin, global_attributes)
+
+        # Extract ISO topic category
+
+        # Set dataset production status?? Not supported by ACDD
 
         # Set operational status. This need specific care and checking for compliance
         if 'processing_level' in global_attributes or 'operational_status' in global_attributes:
@@ -728,6 +737,20 @@ class Nc_to_mmd(object):
             myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'iso_topic_category'))
             myel.text = 'Not available'
 
+    def add_wigos_related_info(self, myxmltree, mynsmap, ncin, myattrs):
+        wigos_id = getattr(ncin, 'wigosId')
+        querywigosid = "https://oscar.wmo.int/surface/rest/api/search/station?wigosId="
+        try:
+            with ul.urlopen(querywigosid+wigos_id, timeout=10) as response:
+                wigos_data = json.load(response)
+                station_name = wigos_data['stationSearchResults'][0]['name']
+                station_url = 'https://oscar.wmo.int/surface/#/search/station/stationReportDetails/'+ wigos_id
+                myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'related_information'))
+                ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'type')).text = 'Observation facility'
+                ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'description')).text = 'WIGOS Station: '+station_name+' ('+wigos_id+')'
+                ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'resource')).text = 'https://oscar.wmo.int/surface/#/search/station/stationReportDetails/'+wigos_id
+        except:
+            print('Could not add wigos information')
 
     # This relies on specific formatting of the global attribute. If not followed, it will be ignored and status set to Scientific. Use local extension to ACDD if available
     def add_operational_status(self, myxmltree, mynsmap, ncin, myattrs):
