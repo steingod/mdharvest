@@ -23,6 +23,19 @@ import pytz
 import uuid
 import re
 
+def sanitize_filename(filename):
+    """
+    Replace non-characters in filename
+    """
+    if filename.endswith(".nc"):
+        name = filename.split('.nc')[0]
+    else:
+        name = filename
+
+    sanitized_filename = re.sub(r'[^a-zA-z0-9]','_', name)
+
+    return sanitized_filename
+
 def traverse_thredds(mystart, dstdir, mydepth):
     print('Traversing:', mystart, 'to depth', mydepth)
     #mystart = 'https://thredds.met.no/thredds/arcticdata/arcticdata.xml'
@@ -48,12 +61,23 @@ def traverse_thredds(mystart, dstdir, mydepth):
         mypath = mypath.replace('dataset=','')
         mypath = re.sub('https?://*.*.*/catalog/','',mypath)
         newdstdir = os.path.join(dstdir,mypath)
+
+        #Special handling for specific URL
+        if 'thredds.niva.no' in mystart:
+            #Extract common sub-sub path segments
+            handle = (ds.url.split('subcatalogs/')[-1])
+            common_path = (handle.split('.')[0])
+            newdstdir = os.path.join(dstdir, common_path)
+        else:
+            newdstdir = os.path.join(dstdir, mypath)
+
         #print('>>>',newdstdir)
         # Make more robust...
         if not os.path.exists(newdstdir):
             os.makedirs(newdstdir)
         infile = ds.opendap_url()
-        outfile = os.path.splitext(ds.name)[0]+'.xml'
+        sanitized_name = sanitize_filename(ds.name)
+        outfile = os.path.splitext(sanitized_name)[0]+'.xml'
         #print('>>>', infile)
         #print('>>>', outfile)
         #print('>>>',ds)
