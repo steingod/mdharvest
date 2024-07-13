@@ -164,8 +164,13 @@ class LocalCheckMMD():
                     westernmost = float(myvalue)
                     thisbb.append(westernmost)
 
+        #### As the data to be flagged should only intersect the bounding box in question, the original code is altered as it demands that the boundary box
+        #### should be entirely within the referance boundary box in question.
         # Check bounding box
         # Lists are ordered N, E, S, W
+
+        ### Original - all data within the reference bounding box
+        '''
         self.logger.info("This bounding box: %s",thisbb)
         self.logger.info("Reference bounding box: %s",self.bbox)
         if len(thisbb)<4:
@@ -180,6 +185,63 @@ class LocalCheckMMD():
             self.logger.info("Longitude match")
 
         if (latmatch and lonmatch):
+            return True
+        else:
+            return False
+        #'''
+
+        # Check bounding box
+        # Lists are ordered N, E, S, W
+
+        self.logger.info("This bounding box: %s",thisbb)
+        self.logger.info("Reference bounding box: %s",self.bbox)
+        if len(thisbb)<4:
+            return(False)
+        intercept = False
+
+        ###### For bbox to intersect the reference bbox at least one of the following three cases must be true: #########
+
+        ### At least one corner of thisbb (boundary_box) within self.bbox (reference). Only demand one corner must be within, two or four corners within is thereby also covered.
+        # Within the opposing sides first, then within the sides of self.bbox which bb might cut across.
+        # North-East corner of bb within reference box: # (N < N_max and E < E_max) and (N > S_min and E > W_min)
+        # South-East corner of bb within reference box: # (S > S_min and E < E_max) and (S < N_max and E > W_min)
+        # South-West corner of bb within reference box: # (S > S_min and W > W_min) and (S < N_max and W < E_max)
+        # North-West corner of bb within reference box: # (N < N_max and W > W_min) and (N > S_min and W < E_max)
+
+        if (thisbb[0] < self.bbox[0]) and (thisbb[1] < self.bbox[1]) and (thisbb[0] > self.bbox[2]) and (thisbb[1] > self.bbox[3])\
+            or (thisbb[2] > self.bbox[2]) and (thisbb[1] < self.bbox[1]) and (thisbb[2] < self.bbox[0]) and (thisbb[1] > self.bbox[3])\
+                or (thisbb[2] > self.bbox[2]) and (thisbb[3] > self.bbox[3]) and (thisbb[2] < self.bbox[0]) and (thisbb[3] < self.bbox[1])\
+                    or (thisbb[0] < self.bbox[0]) and (thisbb[3] > self.bbox[3]) and (thisbb[0] > self.bbox[2]) and (thisbb[3] < self.bbox[1]):
+            intercept = True
+            self.logger.info("Interception occurs")
+
+
+        ### thisbb (boundary_box) covers the entire self.bbox (reference).
+        # North side of bb: # N > N_max
+        # East side of bb:  # E > E_max
+        # South side of bb: # S < S_min
+        # West side of bb:  # W < W_min
+
+        elif (thisbb[0] > self.bbox[0]) and (thisbb[1] > self.bbox[1]) and (thisbb[2] < self.bbox[2]) and (thisbb[3] < self.bbox[3]):
+            intercept = True
+            self.logger.info("Interception occurs")
+
+
+        ### thisbb (boundary_box) covers an entire side of self.bbox (reference bbox).
+        # North side of self.bbox covered: # (N > N_max and S < N_max) and (E > E_max and W < W_min)
+        # East side of self.bbox covered:  # (N > N_max and S < S_min) and (E > E_max and W < E_max)
+        # South side of self.bbox covered: # (N > S_min and S < S_min) and (E > E_max and W < W_min)
+        # West side of self.bbox covered:  # (N > N_max and S < S_min) and (E > W_min and W < W_min)
+
+        elif (thisbb[0] > self.bbox[0]) and (thisbb[2] < self.bbox[0]) and (thisbb[1] > self.bbox[1]) and (thisbb[3] < self.bbox[3])\
+            or (thisbb[0] > self.bbox[0]) and (thisbb[2] < self.bbox[2]) and (thisbb[1] > self.bbox[1]) and (thisbb[3] < self.bbox[1])\
+                or (thisbb[0] > self.bbox[2]) and (thisbb[3] < self.bbox[3]) and (thisbb[1] > self.bbox[1]) and (thisbb[3] < self.bbox[3])\
+                    or (thisbb[0] > self.bbox[0]) and (thisbb[2] < self.bbox[2]) and (thisbb[1] > self.bbox[3]) and (thisbb[3] < self.bbox[3]):
+            intercept = True
+            self.logger.info("Interception occurs")
+
+        ### Altered
+        if intercept:
             return True
         else:
             return False
@@ -254,14 +316,34 @@ class LocalCheckMMD():
                     namespaces=mynsmap)
             myelement.text = "Inactive"
 
+        ''' # Original formulation - need to separate elements so that they make sense in functions
         # Check parameters,bounding box and project
         if self.params and not setInactive:
             elements = tree.findall("mmd:keywords[@vocabulary='gcmd']/mmd:keyword", namespaces=mynsmap)
         if self.bbox and not setInactive:
             elements = tree.findall('mmd:geographic_extent/mmd:rectangle', namespaces=mynsmap)
+            print(elements)
         if self.project and not setInactive:
             elements = tree.findall('mmd:project/mmd:short_name', namespaces=mynsmap)
+            print(elements)
             for el in elements:
+                if el.text == None:
+                    setInactive = True
+        # Check information found
+        # some check of elements content...
+        #'''
+
+        # Altered formulation to be able to check these three at the same time
+        # Check parameters,bounding box and project
+        if self.params and not setInactive:
+            params_elements = tree.findall("mmd:keywords[@vocabulary='gcmd']/mmd:keyword", namespaces=mynsmap)
+        if self.bbox and not setInactive:
+            bbox_elements = tree.findall('mmd:geographic_extent/mmd:rectangle', namespaces=mynsmap)
+            print(bbox_elements)
+        if self.project and not setInactive:
+            project_elements = tree.findall('mmd:project/mmd:short_name', namespaces=mynsmap)
+            print(project_elements)
+            for el in project_elements:
                 if el.text == None:
                     setInactive = True
         # Check information found
@@ -270,13 +352,13 @@ class LocalCheckMMD():
 
         # Decide on test
         if self.bbox and not setInactive:
-            if self.check_bounding_box(elements,root):
+            if self.check_bounding_box(bbox_elements,root):
                 mymatch = True
         if self.params and not setInactive:
-            if self.check_params(elements,root):
+            if self.check_params(params_elements,root):
                 mymatch = True
         if self.project and not setInactive:
-            if self.check_project(elements,root):
+            if self.check_project(project_elements,root):
                 mymatch = True
         if (mymatch == False and 
             setInactive == False and cnvDateTime == False):
@@ -350,10 +432,12 @@ def main(argv):
         project = "NORMAP"
         collection = "NMAP"
     elif args.nysmac:
-        bounding = [79.11850,10.45540,78.72381,14.06356]
+        #bounding = [79.11850,10.45540,78.72381,14.06356]   # ORIGINAL
+        bounding = [79.11850,14.06356,78.72381,10.45540]    # Reformulated as the order seem to be [N, E, S, W]
         collection ="NySMAC"
     elif args.tone:
-        project = ""
+        #bounding = [90.,50.,50.,45.]   # ADDED 
+        project = "TONe"                # Filled in
         collection ="TONE"
 
     # Define collections to add
