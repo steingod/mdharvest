@@ -144,8 +144,8 @@ class Nc_to_mmd(object):
             ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Created'
             ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'Automatically generated from ACDD elements'
 
-        # Extract temporal extent
-        if 'time_coverage_start' in global_attributes and 'time_coverage_end' in global_attributes:
+        # Extract temporal extent, this is done if only the time_coverage_start is present, as end can be empty for ongoing datasets
+        if 'time_coverage_start' in global_attributes:
             self.add_temporal_extent(root, ns_map, ncin)
 
         # Extract ISO topic category
@@ -346,7 +346,7 @@ class Nc_to_mmd(object):
         myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'temporal_extent'))
         if 'mystarttime' in locals():
             ET.SubElement(myel, ET.QName(mynsmap['mmd'],'start_date')).text = mystarttime.strftime('%Y-%m-%dT%H:%M:%SZ')
-        if 'myendttime' in locals():
+        if 'myendtime' in locals():
             ET.SubElement(myel, ET.QName(mynsmap['mmd'],'end_date')).text = myendtime.strftime('%Y-%m-%dT%H:%M:%SZ')
 
     # Add personnel, quite complex...
