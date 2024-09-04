@@ -56,5 +56,6 @@ if __name__ == '__main__':
                 mynode.addprevious(mynewnode)
                 break
 
+    ET.indent(myroot, space="  ")
     # Dump results to file
     myxml.write(args.infile, pretty_print=True)

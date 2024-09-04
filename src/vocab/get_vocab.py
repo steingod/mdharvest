@@ -220,6 +220,7 @@ if __name__ == '__main__':
                    'ISO Topic Category',
                    'Dataset Production Status',
                    'Related Information Types',
+                   'ISO Topic Category',
                    'Keywords Vocabulary']
         if voc == 'mmd':
             get_MMDvocab(collections, vocabno)

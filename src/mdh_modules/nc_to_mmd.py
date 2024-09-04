@@ -737,11 +737,19 @@ class Nc_to_mmd(object):
 
     # Add iso_topic_category
     def add_iso_topic_category(self, myxmltree, mynsmap, ncin, myattrs):
+        valid_statements = self.vocabulary.ControlledVocabulary.ISOTopicCategory
         if 'iso_topic_category' in myattrs:
             myisotopic = getattr(ncin, 'iso_topic_category').split(',')
+            validiso = False
             for isot in myisotopic:
-                myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'iso_topic_category'))
-                myel.text = isot.strip()
+                isot = isot.strip()
+                if isot in valid_statements:
+                    myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'iso_topic_category'))
+                    myel.text = isot
+                    validiso = True
+                if validiso == False:
+                    myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'iso_topic_category'))
+                    myel.text = 'Not available'
         else:
             myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'iso_topic_category'))
             myel.text = 'Not available'
