@@ -79,6 +79,9 @@ def traverse_thredds(mystart, dstdir, mydepth):
         sanitized_name = sanitize_filename(ds.name)
         outfile = os.path.splitext(sanitized_name)[0]+'.xml'
         #print('>>>', infile)
+        if not infile.lower().endswith(('.nc','.ncml')):
+            print('Not NCML or NetCDF file, skipping parsing...')
+            continue
         #print('>>>', outfile)
         #print('>>>',ds)
         #print('>>>',ds.url)
@@ -131,6 +134,8 @@ def traverse_thredds(mystart, dstdir, mydepth):
                                     mydoi = ET.SubElement(mynewnode, "{http://www.met.no/schema/mmd}doi")
                                     mydoi.text = mynode.text
                                     myroot.insert(10,mynewnode)
+                            # FIXME need to keep GEUS identifiers
+                            # Not sure if this section is failsafe, lacking an else?
                             # Generate new identifier
                             try:
                                 mynode.text = str(uuid.uuid5(uuid.NAMESPACE_URL,
