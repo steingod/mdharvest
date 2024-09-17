@@ -228,7 +228,7 @@ def traverse_thredds(mystart, dstdir, mydepth):
         related_information_description.text = 'Dataset landing page'
         related_information_resource = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}resource')
-        related_information_resource.text = ds.url.replace('xml','html')
+        related_information_resource.text = ds.url.replace('.xml','.html')
         myroot.insert(-1,related_information)
 
         # Add data_access (not done automatically)
