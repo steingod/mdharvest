@@ -708,8 +708,6 @@ class Nc_to_mmd(object):
         #similarly for instruments, using wmoinstruments_ref key to populate the resource field in mmd.
         valid_statements_instrument = self.vocabulary.ControlledVocabulary.Instrument
         myplatform = getattr(ncin, 'platform').split(',')
-        if 'instrument' in myattrs:
-            myinstrument = getattr(ncin, 'instrument').split(',')
         for i, el in enumerate(myplatform):
             el = el.strip()
             if '(' in el and ')' in el:
@@ -725,19 +723,21 @@ class Nc_to_mmd(object):
                 myel4.text = valid_statements_platform[el]['wmosatellites_ref']
                 #for now, the instrument nested fields within the platform is populated only if the platform and instuments have the same length.
                 #There is currently no quality check that the instrument is onboard the platform.
-                if len(myinstrument) == len(myplatform):
-                    myinst = myinstrument[i].strip()
-                    if '(' in myinst and ')' in myinst:
-                        myinst = re.search('\(.+\)', myinst)
-                        myinst = myinst.group().lstrip('(').rstrip(')').strip()
-                    if myinst in valid_statements_instrument.keys():
-                        myeli = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'instrument'))
-                        myeli2 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'short_name'))
-                        myeli2.text = myinst
-                        myeli3 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'long_name'))
-                        myeli3.text = valid_statements_instrument[myinst]['altLabel']
-                        myeli4 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'resource'))
-                        myeli4.text = valid_statements_instrument[myinst]['wmoinstruments_ref']
+                if 'instrument' in myattrs:
+                    myinstrument = getattr(ncin, 'instrument').split(',')
+                    if len(myinstrument) == len(myplatform):
+                        myinst = myinstrument[i].strip()
+                        if '(' in myinst and ')' in myinst:
+                            myinst = re.search('\(.+\)', myinst)
+                            myinst = myinst.group().lstrip('(').rstrip(')').strip()
+                        if myinst in valid_statements_instrument.keys():
+                            myeli = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'instrument'))
+                            myeli2 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'short_name'))
+                            myeli2.text = myinst
+                            myeli3 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'long_name'))
+                            myeli3.text = valid_statements_instrument[myinst]['altLabel']
+                            myeli4 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'resource'))
+                            myeli4.text = valid_statements_instrument[myinst]['wmoinstruments_ref']
 
     def add_spatial_representation(self, myxmltree, mynsmap, ncin, myattrs):
         myspatr = getattr(ncin, 'spatial_representation')
