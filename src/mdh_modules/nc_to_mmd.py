@@ -698,23 +698,46 @@ class Nc_to_mmd(object):
 
     # Add platform, relies on controlled vocabulary in MMD, will read platform and platform_vocabulary from ACDD if the latter is present and map
     def add_platform(self, myxmltree, mynsmap, ncin, myattrs):
-        myplatform = getattr(ncin, 'platform')
-        if ',' in myplatform:
-            # Split string in multiple elements
-            myplatform = myplatform.split(',')
-        if isinstance(myplatform, list):
-            myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
-            for el in platform:
-                myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
-                # Not added yet since MMD only relies on satellite data for now.
-                valid_statements = []
+        # valid statements for platforms are dictionaries of the following form:
+        # Platform = {..., 'Metop-B': {'wmosatellites_ref': 'https://www.wmo-sat.info/oscar/satellites/view/metop-b',
+        #                              'altLabel': 'Meteorological operational satellite - B'}
+        # this allows to extract both long name and resources in case the short/preferred name is available either as comma separated list, or in parenthesis
+        # e.g. :platform = "NOAA-21, GCOM-W1" ;
+        # e.g. :platform = "some long name (NOAA-21), someother long name (GCOM-W1)";
+        valid_statements_platform = self.vocabulary.ControlledVocabulary.Platform
+        #similarly for instruments, using wmoinstruments_ref key to populate the resource field in mmd.
+        valid_statements_instrument = self.vocabulary.ControlledVocabulary.Instrument
+        myplatform = getattr(ncin, 'platform').split(',')
+        if 'instrument' in myattrs:
+            myinstrument = getattr(ncin, 'instrument').split(',')
+        for i, el in enumerate(myplatform):
+            el = el.strip()
+            if '(' in el and ')' in el:
+               el = re.search('\(.+\)', el)
+               el = el.group().lstrip('(').rstrip(')').strip()
+            if el in valid_statements_platform.keys():
+                myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
+                myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'short_name'))
                 myel2.text = el
-        else:
-            myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
-            myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
-            # Not added yet since MMD only relies on satellite data for now.
-            valid_statements = []
-            myel2.text = myplatform
+                myel3 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
+                myel3.text = valid_statements_platform[el]['altLabel']
+                myel4 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'resource'))
+                myel4.text = valid_statements_platform[el]['wmosatellites_ref']
+                #for now, the instrument nested fields within the platform is populated only if the platform and instuments have the same length.
+                #There is currently no quality check that the instrument is onboard the platform.
+                if len(myinstrument) == len(myplatform):
+                    myinst = myinstrument[i].strip()
+                    if '(' in myinst and ')' in myinst:
+                        myinst = re.search('\(.+\)', myinst)
+                        myinst = myinst.group().lstrip('(').rstrip(')').strip()
+                    if myinst in valid_statements_instrument.keys():
+                        myeli = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'instrument'))
+                        myeli2 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'short_name'))
+                        myeli2.text = myinst
+                        myeli3 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'long_name'))
+                        myeli3.text = valid_statements_instrument[myinst]['altLabel']
+                        myeli4 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'resource'))
+                        myeli4.text = valid_statements_instrument[myinst]['wmoinstruments_ref']
 
     def add_spatial_representation(self, myxmltree, mynsmap, ncin, myattrs):
         myspatr = getattr(ncin, 'spatial_representation')
