@@ -47,6 +47,7 @@ def extract_metadata(url):
         return(None)
 
     # wait is before and sleep is after render is done
+    # Make this configurable depending on source
     resp.html.render(wait=15, sleep=3)
     print(resp.html.render(wait=15, sleep=3))
 
@@ -121,7 +122,6 @@ def traversesite(url, dstdir):
         except Exception as e:
             print('Error returned: ',e)
             continue
-        #print(sosomd)
         mmd = sosomd2mmd(sosomd)
         if mmd == None:
             print('Record is not complete and is skipped...')
@@ -137,7 +137,7 @@ def traversesite(url, dstdir):
 def sosomd2mmd(sosomd):
 
     print('Now in sosomd2mmd...')
-    print(json.dumps(sosomd,indent=4))
+    ##print(json.dumps(sosomd,indent=4))
 
     # Create XML file with namespaces
     ET.register_namespace('mmd',"http://www.met.no/schema/mmd")
@@ -153,9 +153,14 @@ def sosomd2mmd(sosomd):
     mykeys = sosomd.keys()
     print(mykeys)
     print(sosomd['url'])
+    print(type(sosomd['identifier']))
     if 'identifier' in mykeys:
-        if 'value' in sosomd['identifier'].keys():
-            myel.text = sosomd['identifier']['value']
+        if isinstance(sosomd['identifier'], dict):
+            if 'value' in sosomd['identifier'].keys():
+                myel.text = sosomd['identifier']['value']
+            else:
+                print('Not handled yet')
+                return None
         else:
             myel.text = sosomd['identifier']
     elif 'url' in mykeys:
@@ -194,19 +199,28 @@ def sosomd2mmd(sosomd):
     myel.set('lang','en')
     # temporal extent
     # need to reformat strings to match mmd
+    print('##### so far so good...')
+    print(sosomd['temporalCoverage'])
+    # Double check, could be that this is instantaneous dataset and not ongoing
     if 'temporalCoverage' in sosomd:
-        tempcov = sosomd['temporalCoverage'].split('/')
-        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'temporal_extent'))
-        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'start_date'))
-        myel2.text = tempcov[0]
-        if tempcov[1]:
-            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
-            myel2.text = tempcov[1]
+        if '/' in sosomd['temporalCoverage']:
+            tempcov = sosomd['temporalCoverage'].split('/')
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'temporal_extent'))
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'start_date'))
+            myel2.text = tempcov[0]
+            if tempcov[1]:
+                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
+                myel2.text = tempcov[1]
+        else:
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'temporal_extent'))
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'start_date'))
+            myel2.text = sosomd['temporalCoverage']
     else:
-        print('No temporal specification for dataset, skipping...')
+        print('No temporal specification for dataset, skipping record...')
         return None
     # geographical extent - not working
     # for PDC this reverts lat/lon
+    print('##### so far so good...')
     if 'box' in sosomd['spatialCoverage']['geo']:
         geobox = sosomd['spatialCoverage']['geo']['box'].split(' ')
         #print(geobox)
@@ -233,6 +247,7 @@ def sosomd2mmd(sosomd):
     # failing here now Øystein Godøy, METNO/FOU, 2023-11-02  for pdc
     #mykws = sosomd['keywords'].split(',')
     mykws = sosomd['keywords']
+    print('##### so far so good...')
     for kw in mykws:
         if 'UNKNOWN' in kw.upper():
             continue
@@ -262,6 +277,7 @@ def sosomd2mmd(sosomd):
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
     myel2.text = sosomd['url']
     print(ET.tostring(myroot, pretty_print=True, encoding='unicode'))
+    sys.exit()
     # personnel
     # sosomd['creator'] type og name
     # data centre
