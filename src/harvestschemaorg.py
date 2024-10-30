@@ -32,7 +32,7 @@ from bs4 import BeautifulSoup as bs
 import json
 import datetime as dt
 
-def extract_metadata(url):
+def extract_metadata(url, delayedloading):
     """
     Extract metadata from webpage. Using requests_html since NSF ADC is using Javascript to render pages...
     """
@@ -48,8 +48,15 @@ def extract_metadata(url):
 
     # wait is before and sleep is after render is done
     # Make this configurable depending on source
-    resp.html.render(wait=15, sleep=3)
-    print(resp.html.render(wait=15, sleep=3))
+    waitingtime = 0
+    sleeptime = 0
+    if delayedloading:
+        print('Prepared for NSF ADC scraping with delayed loading of pages.')
+        waitingtime = 15
+        sleeptime = 3
+
+    resp.html.render(wait=waitingtime, sleep=sleeptime)
+    #print(resp.html.render(wait=15, sleep=3))
 
     # Extract information from HTML
     metadata = extruct.extract(resp.html.html, base_url=url)
@@ -96,7 +103,7 @@ def ccadiapicall(url, dstdir):
             if page > 0:
                 sys.exit()
 
-def traversesite(url, dstdir):
+def traversesite(url, dstdir, delayedloading):
     """
     Traverse the sitemap and extract information
     Works on NSF ADC not on GEM yet as their sitemap is different
@@ -118,7 +125,7 @@ def traversesite(url, dstdir):
             url2read = tmp
         print('Extracting information from: [%s]' % url2read)
         try:
-            sosomd = extract_metadata(url2read)
+            sosomd = extract_metadata(url2read, delayedloading)
         except Exception as e:
             print('Error returned: ',e)
             continue
@@ -135,6 +142,9 @@ def traversesite(url, dstdir):
     return
 
 def sosomd2mmd(sosomd):
+    """
+    Transforming the JSON-LD from schema.org (ESIP's) to MMD format.
+    """
 
     print('Now in sosomd2mmd...')
     ##print(json.dumps(sosomd,indent=4))
@@ -146,14 +156,12 @@ def sosomd2mmd(sosomd):
     
     myroot = ET.Element(ET.QName(ns_map['mmd'], 'mmd'), nsmap=ns_map)
 
-    # identifier
-    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_identifier'))
-    # Only valid for GEM
-    #myel.text = sosomd['identifier']['value']
+    # Get all keys from JSON for further use
     mykeys = sosomd.keys()
     print(mykeys)
-    print(sosomd['url'])
-    print(type(sosomd['identifier']))
+
+    # Extract the identifier, assumed to always be present
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_identifier'))
     if 'identifier' in mykeys:
         if isinstance(sosomd['identifier'], dict):
             if 'value' in sosomd['identifier'].keys():
@@ -170,7 +178,7 @@ def sosomd2mmd(sosomd):
         print('Cannot retrieve identifier...')
         sys.exit()
 
-    # metadata update
+    # Get metadata update
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'last_metadata_update'))
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
     myel3 = ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime'))
@@ -186,21 +194,22 @@ def sosomd2mmd(sosomd):
                 ET.QName(ns_map['mmd'],'datetime')).text = sosomd['dateModified']
         ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Updated'
         ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
-    # metadata status
+
+    # Set metadata status
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_status'))
     myel.text = 'Active'
-    # title
+
+    # Get title, assumed to always be present
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'title'))
     myel.text = sosomd['name']
     myel.set('lang','en')
-    # abstract
+
+    # Get abstract, assumed to always be present
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'abstract'))
     myel.text = sosomd['description']
     myel.set('lang','en')
-    # temporal extent
-    # need to reformat strings to match mmd
-    print('##### so far so good...')
-    print(sosomd['temporalCoverage'])
+    # Get temporal extent, if not present dataset is not handled
+    # FIXME need to reformat strings to match mmd
     # Double check, could be that this is instantaneous dataset and not ongoing
     if 'temporalCoverage' in sosomd:
         if '/' in sosomd['temporalCoverage']:
@@ -218,73 +227,151 @@ def sosomd2mmd(sosomd):
     else:
         print('No temporal specification for dataset, skipping record...')
         return None
-    # geographical extent - not working
-    # for PDC this reverts lat/lon
-    print('##### so far so good...')
-    if 'box' in sosomd['spatialCoverage']['geo']:
-        geobox = sosomd['spatialCoverage']['geo']['box'].split(' ')
-        #print(geobox)
-        #print(type(geobox))
-        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographical_extent'))
-        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
-        # Need to be made more robust
-        if 'additionalProperty' in sosomd['spatialCoverage']:
-            if 'CRS84' in sosomd['spatialCoverage']['additionalProperty'][0]['value']:
-                myel.set('srsName','EPSG;4326')
-            else:
-                myel.set('srsName','EPSG;4326')
-        myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'north'))
-        myel3.text = geobox[3]
-        myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'south'))
-        myel3.text =  geobox[1]
-        myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'west'))
-        myel3.text =  geobox[0].rstrip(',')
-        myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'east'))
-        myel3.text =  geobox[2].rstrip(',')
-    else:
-        print('Only supporting bounding boxes for now')
-    # keywords are separated by ','.
-    # failing here now Øystein Godøy, METNO/FOU, 2023-11-02  for pdc
-    #mykws = sosomd['keywords'].split(',')
-    mykws = sosomd['keywords']
-    print('##### so far so good...')
-    for kw in mykws:
-        if 'UNKNOWN' in kw.upper():
-            continue
-        if 'EARTH SCIENCE' in kw.upper():
-            if 'myelgcmd' not in locals():
-                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
-                myel.set('vocabulary','GCMDSK')
-            myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-            myelgcmd.text = kw.strip()
-        elif 'IN SITU/LABORATORY INSTRUMENTS' in kw.upper():
-            continue # while testing
-            if 'myplatform' not in locals():
-                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
-                myel.set('vocabulary','GCMDSK')
-            myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-            myelgcmd.text = kw.strip()
+
+    # Geographical extent 
+    if 'spatialCoverage' in mykeys:
+        geokeys = sosomd['spatialCoverage']['geo'].keys()
+        # FIXME for PDC this reverts lat/lon
+        if 'box' in sosomd['spatialCoverage']['geo']:
+            geobox = sosomd['spatialCoverage']['geo']['box'].split(' ')
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographical_extent'))
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
+            # Need to be made more robust
+            if 'additionalProperty' in sosomd['spatialCoverage']:
+                if 'CRS84' in sosomd['spatialCoverage']['additionalProperty'][0]['value']:
+                    myel.set('srsName','EPSG;4326')
+                else:
+                    myel.set('srsName','EPSG;4326')
+            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'north'))
+            myel3.text = geobox[3]
+            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'south'))
+            myel3.text =  geobox[1]
+            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'west'))
+            myel3.text =  geobox[0].rstrip(',')
+            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'east'))
+            myel3.text =  geobox[2].rstrip(',')
         else:
-            if 'myelnone' not in locals():
-                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
-                myel.set('vocabulary','none')
-            myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-            myelgcmd.text = kw.strip()
-    # related_information
+            # Handle point from PANGEA, could be more thatdoes like this...
+            # FIXME check that no bounding boxes are presented this way
+            if 'latitude' in geokeys and 'longitude' in geokeys:
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographical_extent'))
+                print(sosomd['spatialCoverage']['geo']['latitude'])
+                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
+                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'north'))
+                myel3.text = str(sosomd['spatialCoverage']['geo']['latitude'])
+                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'south'))
+                myel3.text =  str(sosomd['spatialCoverage']['geo']['latitude'])
+                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'west'))
+                myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
+                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'east'))
+                myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
+            else:
+                print('Only supporting bounding boxes for now, skipping record')
+                return(None)
+    # keywords are separated by ','. Not all are using this...
+    # failing here now Øystein Godøy, METNO/FOU, 2023-11-02  for pdc
+    if 'keywords' in mykeys: 
+        mykws = sosomd['keywords'].split(',')
+        #mykws = sosomd['keywords']
+        for kw in mykws:
+            if 'UNKNOWN' in kw.upper():
+                continue
+            if 'EARTH SCIENCE' in kw.upper():
+                if 'myelgcmd' not in locals():
+                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                    myel.set('vocabulary','GCMDSK')
+                myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                myelgcmd.text = kw.strip()
+            elif 'IN SITU/LABORATORY INSTRUMENTS' in kw.upper():
+                continue # while testing
+                if 'myplatform' not in locals():
+                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                    myel.set('vocabulary','GCMDSK')
+                myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                myelgcmd.text = kw.strip()
+            else:
+                if 'myelnone' not in locals():
+                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                    myel.set('vocabulary','none')
+                myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                myelgcmd.text = kw.strip()
+
+    # Extract variable information
+    # FIXME check ontology references later
+    # Need to be expanded
+    if 'variableMeasured' in mykeys:
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+        myel.set('vocabulary','None')
+        for el in sosomd['variableMeasured']:
+            myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+            myelkw.text = el['name']
+
+    # related_information, assuming primarily landing pages are conveyed
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_information'))
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'type'))
     myel2.text = "Dataset landing page"
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
     myel2.text = sosomd['url']
+
+    print(json.dumps(sosomd, indent=2))
+    # Get personnel involved
+    # FIXME not sure how to differentiate roles
+    if 'creator' in mykeys:
+        for el in sosomd['creator']:
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'personnel'))
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'role'))
+            myel3.text = el['name']
+            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
+            myel3.text = el['email']
+            # sosomd['creator'] type og name
+
+    # Get data centre
+    if 'publisher' in mykeys:
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'data_center'))
+        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'data_center_name'))
+        myel21 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
+        myel21.text = sosomd['publisher']['name']
+        myel22 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
+        myel22.text = sosomd['publisher']['name']
+        myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'data_center_url'))
+        myel3.text = sosomd['publisher']['url']
+
+    # Get license
+    # FIXME identifier is only tested on PANGAEA so far...
+    if 'license' in mykeys:
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'use_constraint'))
+        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
+        myel2.text = sosomd['license']
+        myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'identifier'))
+        # sosomd['isAccessibleForFree'] true or false check...
+        if '/by/' in sosomd['license']:
+            print('Assuming a CC license...')
+            myidentifier = 'CC-BY'
+            myel3.text = myidentifier
+
+    # Get data_access information
+    if 'distribution' in mykeys:
+        if isinstance(sosomd['distribution'], list):
+            for el in sosomd['distribution']:
+                if el['@type'] == "DataDownload":
+                    if el['encodingFormat'] == "text/tab-separated-values":
+                        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'data_access'))
+                        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'type'))
+                        myel2.text = 'HTTP'
+                        myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
+                        myel3.text = el['contentUrl']
+
+        else:
+            print('To be handled later...')
+
+    # Get parent/child information
+    if 'isPartOf' in mykeys:
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_dataset'))
+        myel.text = sosomd['isPartOf']
+        myel.set('relation_type','parent')
+
     print(ET.tostring(myroot, pretty_print=True, encoding='unicode'))
     sys.exit()
-    # personnel
-    # sosomd['creator'] type og name
-    # data centre
-    # sosomd['publisher'] type og name
-    # license
-    # sosomd['isAccessibleForFree'] true or false check...
-
     return myroot
 
 """
@@ -298,19 +385,19 @@ if __name__ == '__main__':
     # Parse command line arguments
     parser = argparse.ArgumentParser(
             description='Traverse a sitemap to retrieve schema.org '+
-            'discovery metadata to MMD. Provide the sitemap as input.')
+            'discovery metadata to MMD. Provide the sitemap as input.', epilog="NSF ADC is serving schem.org through Javascript pages that are slow loading. Thus for scraping NSF ADC option d is required.")
     parser.add_argument('starturl', type=str, 
             help='URL to sitemap')
     parser.add_argument('dstdir', type=str, 
             help='Directory where to put MMD files')
     parser.add_argument('-c', '--ccadi-api', dest='ccadiapi', action='store_true')
+    parser.add_argument('-d', '--delayed-loading', dest='delayedloading', action='store_true')
     try:
         args = parser.parse_args()
     except:
         parser.print_help()
         sys.exit()
     
-    print('>>> ', args.ccadiapi)
     if args.ccadiapi:
         try:
             ccadiapicall(args.starturl, args.dstdir)
@@ -319,7 +406,7 @@ if __name__ == '__main__':
             sys.exit()
     else:
         try:
-            traversesite(args.starturl, args.dstdir)
+            traversesite(args.starturl, args.dstdir, args.delayedloading)
         except Exception as e:
             print('Something went wrong:', e)
             sys.exit()
