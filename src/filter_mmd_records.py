@@ -58,6 +58,7 @@ def parse_arguments():
     parser.add_argument("-p","--parameters",dest="parameters", help="Comma separated list of parameters to filter on.", required=False)
     parser.add_argument("-b","--bounding",dest="bounding", help="Comma separated bounding box (N,E,S,W) to filter on.", required=False)
     parser.add_argument("-a","--aen",help="Checks project affiliation and adds Nansen Legacy collection", action='store_true')
+    parser.add_argument("-y","--cryoclim",help="Checks project affiliation and adds CryoClim (CC) collection", action='store_true')
     parser.add_argument("-g","--gcw",help="Checks parameters (GCMD) for cryosphere and adds GCW collection", action='store_true')
     parser.add_argument("-s","--sios",help="Checks bounding box and adds SIOS collection.", action='store_true')
     parser.add_argument("-i","--infranor",help="Checks project affiliation and adds InfraNOR collection.", action='store_true')
@@ -380,6 +381,7 @@ class LocalCheckMMD():
                         mycollection.insert(mycollection.index(myelement),
                                 ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>"+item+"</mmd:collection>"""))
         #tree = ET.ElementTree(mycollection)
+        ET.indent(root, space="  ")
         tree.write(mmd_file, pretty_print=True)
 
         return mymatch
@@ -431,6 +433,9 @@ def main(argv):
     elif args.nmap:
         project = "NORMAP"
         collection = "NMAP"
+    elif args.cryoclim:
+        project = "CryoClim"
+        collection = "CC"
     elif args.nysmac:
         #bounding = [79.11850,10.45540,78.72381,14.06356]   # ORIGINAL
         bounding = [79.11850,14.06356,78.72381,10.45540]    # Reformulated as the order seem to be [N, E, S, W]
@@ -443,7 +448,7 @@ def main(argv):
     # Define collections to add
     if args.collection:
         collection = args.collection.split(',')
-    elif ((not args.sios) and (not args.gcw) and (not args.nmap) and (not args.aen) and (not args.infranor) and (not args.tone) and (not args.nysmac)):
+    elif ((not args.sios) and (not args.gcw) and (not args.cryoclim) and (not args.nmap) and (not args.aen) and (not args.infranor) and (not args.tone) and (not args.nysmac)):
         collection = None
 
     # Read config file

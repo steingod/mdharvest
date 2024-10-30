@@ -171,8 +171,10 @@ class MetadataHarvester(object):
                 return(0)
             pageCounter = 1
             resumptionToken = myxml.find('.//{*}resumptionToken')
-            if resumptionToken == None:
+            print('#### ',type(resumptionToken.text))
+            if resumptionToken.text == None or resumptionToken.text == '0':
                 self.logger.info("Nothing more to do")
+                resumptionToken = None
             else:
                 resumptionToken = resumptionToken.text
 
@@ -205,7 +207,10 @@ class MetadataHarvester(object):
 
                 resumptionToken = myxml.find('.//{*}resumptionToken')
                 if resumptionToken != None:
-                    resumptionToken = resumptionToken.text
+                    if resumptionToken.text == '0':
+                        resumptionToken = None
+                    else:
+                        resumptionToken = resumptionToken.text
 
                 pageCounter += 1
 
