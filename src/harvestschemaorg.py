@@ -31,6 +31,7 @@ import json
 from bs4 import BeautifulSoup as bs
 import json
 import datetime as dt
+import gc
 
 def extract_metadata(url, delayedloading):
     """
@@ -38,7 +39,7 @@ def extract_metadata(url, delayedloading):
     """
 
     # Use requests_html
-    print('>>>>>', url)
+    #print('>>>>>', url)
     s = HTMLSession()
     try:
         resp = s.get(url)
@@ -61,6 +62,7 @@ def extract_metadata(url, delayedloading):
     # Extract information from HTML
     metadata = extruct.extract(resp.html.html, base_url=url)
     #metadata_box = extruct.extract("https://data.g-e-m.dk/Datasets?doi=10.17897/KBN7-WP73")
+    del resp
 
     #print(metadata)
     if len(metadata['json-ld']) == 0:
@@ -95,13 +97,18 @@ def ccadiapicall(url, dstdir):
                     print('Record is not complete and is skipped...')
                     continue
                 # Dump MMD file
-                output_file = 'mytestfile.xml' # while testing...
-                #output_file = sosomd['identifier']
+                #output_file = 'mytestfile.xml' # while testing...
+                output_file = sosomd['identifier']
                 et = ET.ElementTree(mmd)
                 et.write(output_file, pretty_print=True)
+                del mmd
+                del et
+            del mypage
             page += 1
             if page > 0:
                 sys.exit()
+
+    return
 
 def traversesite(url, dstdir, delayedloading):
     """
@@ -134,10 +141,20 @@ def traversesite(url, dstdir, delayedloading):
             print('Record is not complete and is skipped...')
             continue
         # Dump MMD file
-        output_file = 'mytestfile.xml' # while testing...
-        #output_file = sosomd['identifier']
+        #output_file = 'mytestfile.xml' # while testing...
+        if 'http' in sosomd['identifier']:
+            tmpname = sosomd['identifier'].split('/')[-1]
+        else:
+            tmpname = sosomd['identifier']
+        filename = tmpname.replace('.','-')+'.xml' 
+        output_file = dstdir+'/'+filename
+        print(output_file)
         et = ET.ElementTree(mmd)
         et.write(output_file, pretty_print=True)
+        del sosomd
+        del mmd
+        del et
+        gc.collect()
 
     return
 
@@ -158,7 +175,7 @@ def sosomd2mmd(sosomd):
 
     # Get all keys from JSON for further use
     mykeys = sosomd.keys()
-    print(mykeys)
+    #print(mykeys)
 
     # Extract the identifier, assumed to always be present
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_identifier'))
@@ -255,7 +272,6 @@ def sosomd2mmd(sosomd):
             # FIXME check that no bounding boxes are presented this way
             if 'latitude' in geokeys and 'longitude' in geokeys:
                 myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographical_extent'))
-                print(sosomd['spatialCoverage']['geo']['latitude'])
                 myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
                 myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'north'))
                 myel3.text = str(sosomd['spatialCoverage']['geo']['latitude'])
@@ -313,17 +329,27 @@ def sosomd2mmd(sosomd):
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
     myel2.text = sosomd['url']
 
-    print(json.dumps(sosomd, indent=2))
     # Get personnel involved
     # FIXME not sure how to differentiate roles
     if 'creator' in mykeys:
-        for el in sosomd['creator']:
+        #print(sosomd['creator'])
+        if isinstance(sosomd['creator'],list):
+            for el in sosomd['creator']:
+                #print(el)
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'personnel'))
+                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'role'))
+                myel2.text = el['name']
+                if 'email' in el.keys():
+                    myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
+                    myel3.text = el['email']
+                # sosomd['creator'] type og name
+        else:
             myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'personnel'))
             myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'role'))
-            myel3.text = el['name']
-            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
-            myel3.text = el['email']
-            # sosomd['creator'] type og name
+            myel2.text = sosomd['creator']['name']
+            if 'email' in sosomd['creator'].keys():
+                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
+                myel3.text = sosomd['creator']['email']
 
     # Get data centre
     if 'publisher' in mykeys:
@@ -370,8 +396,8 @@ def sosomd2mmd(sosomd):
         myel.text = sosomd['isPartOf']
         myel.set('relation_type','parent')
 
-    print(ET.tostring(myroot, pretty_print=True, encoding='unicode'))
-    sys.exit()
+    #print(ET.tostring(myroot, pretty_print=True, encoding='unicode'))
+    #sys.exit()
     return myroot
 
 """
