@@ -109,8 +109,6 @@ class Nc_to_mmd(object):
         if 'id' in global_attributes:
             self.add_identifier(root, ns_map, ncin, global_attributes)
 
-        # Extract collection?? Not supported by ACDD, add afterwards using filter records from harvester. To be reconsidered in the future.
-
         # Extract title
         if 'title' in global_attributes:
             self.add_title(root, ns_map, ncin)
@@ -132,6 +130,10 @@ class Nc_to_mmd(object):
 
         # Create dataset production status. Default Not available
         self.add_dataset_production_status(root, ns_map)
+
+        # Extract collection (sometimes provided as additional global attribute)
+        if 'collection' in global_attributes:
+            self.add_collection(root, ns_map, ncin)
 
         # Extract last metadata update. Multiple elements to process. Check both date_created and date_metadata_modified
         if 'date_created' in global_attributes:
@@ -250,6 +252,15 @@ class Nc_to_mmd(object):
 
     def add_dataset_production_status(self, myxmltree, mynsmap):
         ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'dataset_production_status')).text = 'Not available'
+
+    def add_collection(self, myxmltree, mynsmap, ncin):
+        valid_identifiers = self.vocabulary.ControlledVocabulary.CollectionKeywords
+        collection = getattr(ncin, 'collection')
+        collection = collection.split(',')
+        for c in collection:
+            c = c.strip()
+            if c in valid_identifiers:
+                ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'collection')).text = c
 
     # Check both date_created and date_metadata_modified
     # FIXME add multiple updates

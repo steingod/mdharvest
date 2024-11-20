@@ -196,12 +196,18 @@ def traverse_thredds(mystart, dstdir, mydepth):
 
         # Add collection after ds production status
         dsstatus = myxml.find("./mmd:dataset_production_status",namespaces=myroot.nsmap)
-        mynodeadc = ET.Element("{http://www.met.no/schema/mmd}collection")
-        mynodeadc.text = 'ADC'
-        dsstatus.addnext(mynodeadc)
-        mynodensdn = ET.Element("{http://www.met.no/schema/mmd}collection")
-        mynodensdn.text = 'NSDN'
-        mynodeadc.addnext(mynodensdn)
+        tags = []
+        for collection in myxml.findall("./mmd:collection",namespaces=myroot.nsmap):
+            tags.append(collection.text)
+        if 'NSDN' not in tags:
+            mynodensdn = ET.Element("{http://www.met.no/schema/mmd}collection")
+            mynodensdn.text = 'NSDN'
+            dsstatus.addnext(mynodensdn)
+        if 'ADC' not in tags:
+            mynodeadc = ET.Element("{http://www.met.no/schema/mmd}collection")
+            mynodeadc.text = 'ADC'
+            dsstatus.addnext(mynodeadc)
+
 
         # Check and potentially modify activity_type
         mynode = myxml.find("./mmd:activity_type",namespaces=myroot.nsmap)
