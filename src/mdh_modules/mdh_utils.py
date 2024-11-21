@@ -13,6 +13,11 @@ NOTES:
 
 """
 
+import os
+import sys
+import logging
+from logging.handlers import TimedRotatingFileHandler
+
 def initialise_logger(outputfile, name):
     # Check that logfile exists
     logdir = os.path.dirname(outputfile)

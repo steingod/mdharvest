@@ -12,6 +12,18 @@ UPDATED:
 NOTES:
 
 """
+
+import os
+import threddsclient
+from mdh_modules.nc_to_mmd import Nc_to_mmd
+import vocab.ControlledVocabulary
+import vocab.CFGCMD
+import lxml.etree as ET
+import uuid
+import re
+#from datetime import datetime
+#import pytz
+
 def sanitize_filename(filename):
     """
     Replace non-characters in filename
@@ -25,7 +37,7 @@ def sanitize_filename(filename):
 
     return sanitized_filename
 
-def traverse_thredds(mystart, dstdir, mydepth):
+def traverse_thredds(mystart, dstdir, mydepth, mylog):
     mylog.info('Traversing: %s to depth %d', mystart, mydepth)
     #mystart = 'https://thredds.met.no/thredds/arcticdata/arcticdata.xml'
     #print(mystart)

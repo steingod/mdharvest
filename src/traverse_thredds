@@ -13,20 +13,8 @@
 import sys
 import os
 import argparse
-import threddsclient
-from mdh_modules.nc_to_mmd import Nc_to_mmd
 from mdh_modules.mdh_utils import initialise_logger
-import mdh_modules.traverse_thredds_utils
-import lxml.etree as ET
-from datetime import datetime
-import vocab.ControlledVocabulary
-import vocab.CFGCMD
-import logging
-from logging.handlers import TimedRotatingFileHandler
-import pytz
-import uuid
-import re
-
+from mdh_modules.traverse_thredds_utils import traverse_thredds
 
 if __name__ == '__main__':
     # Parse command line arguments
@@ -52,7 +40,7 @@ if __name__ == '__main__':
     mylog.info('\n==========\nConfiguration of logging is finished.')
 
     try:
-        traverse_thredds(args.starturl, args.dstdir, args.depth)
+        traverse_thredds(args.starturl, args.dstdir, args.depth, mylog)
     except Exception as e:
         mylog.error('Something went wrong:', e)
         sys.exit()
