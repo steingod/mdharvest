@@ -14,6 +14,7 @@ NOTES:
 """
 
 import os
+import sys
 import threddsclient
 from mdh_modules.nc_to_mmd import Nc_to_mmd
 import vocab.ControlledVocabulary
@@ -48,6 +49,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
     else:
         mydir = mystart.replace('catalog.html','')
     #print('>>>', mystart)
+    myparentid = None
     for ds in threddsclient.crawl(mystart, depth=mydepth):
         mylog.info('Processing:\n\t%s', ds.name)
         #print('\tLanding page:',ds.url,sep='\n\t\t')
@@ -63,7 +65,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
         mypath = re.sub('https?://*.*.*/catalog/','',mypath)
         newdstdir = os.path.join(dstdir,mypath)
 
-        #Special handling for specific URL
+        # Special handling for specific URL
         if 'thredds.niva.no' in mystart:
             #Extract common sub-sub path segments
             handle = (ds.url.split('subcatalogs/')[-1])
@@ -72,7 +74,6 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
         else:
             newdstdir = os.path.join(dstdir, mypath)
 
-        #print('>>>',newdstdir)
         # Make more robust...
         if not os.path.exists(newdstdir):
             os.makedirs(newdstdir)
@@ -101,10 +102,25 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
 
         if myxml is None:
             continue
+        # Assumes that the NCML identifier is valid for all files until the next ncml is found
+        if infile.lower().endswith('.ncml'):
+            myparentid = md.identifier
+        print('########################################################')
+        print('####',myparentid)
         # Modify the XML generated with information from THREDDS
         #print('Parsing XML')
         #myxml = ET.parse(os.path.join(dstdir,outfile))
         myroot = myxml.getroot()
+        # Add parent record if record is deemed child
+        if myparentid:
+            myrelatedds = myxml.find("./mmd:metadata_identifier", myroot.nsmap)
+            if infile.lower().endswith('.nc') and not myrelatedds:
+                print('assumes file to be child')
+                myreldata = ET.Element("{http://www.met.no/schema/mmd}related_dataset")
+                myreldata.set('relation_type','parent')
+                myreldata.text = myparentid
+                myroot.append(myreldata)
+
         # Check and potentially modify identifier
         mynode = myxml.find("./mmd:metadata_identifier", myroot.nsmap)
         #print(mynode.text, ds.url.replace('catalog.xml?dataset=',''))

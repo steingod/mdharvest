@@ -47,6 +47,7 @@ class Nc_to_mmd(object):
         self.parse_wmslayers = parse_wmslayers
         self.print_file = print_file
         self.vocabulary = vocabulary
+        self.identifier = None
 
     def iscfstdn(self, cfname, cf_lookup):
         if cfname in cf_lookup:
@@ -245,6 +246,7 @@ class Nc_to_mmd(object):
             mynamaut = 'None'
         myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'metadata_identifier'))
         myel.text = myid
+        self.identifier = myid
 
     def add_metadata_status(self, myxmltree, mynsmap):
         ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'metadata_status')).text = 'Active'
