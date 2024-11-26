@@ -95,18 +95,18 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
         # Check if this file already exist 
         # Need to update MMD if source (NetCDF or NCML) has been updated since the last run
         if os.path.isfile('/'.join([newdstdir,outfile])):
-            # Check if the source file (NetCDF or NCML) has been updated after the MMD was generated
-            dsmodtime = (datetime.strptime(ds.modified,"%Y-%m-%dT%H:%M:%SZ")-epochroot).total_seconds()
-            mmdmodtime = os.path.getmtime('/'.join([newdstdir,outfile]))
-            mylog.info("dst %d - %d", mmdmodtime, dsmodtime)
-            if dsmodtime > mmdmodtime:
-                mylog.info("%s is updated after the last MMD generation, updating MMD", infile)
-            else:
-                mylog.info("%s exists and nothing new has happened, skipping now", outfile)
-                continue
-        #print('>>>', outfile)
-        #print('>>>',ds)
-        #print('>>>',ds.url)
+            # Check if modified is available, if not create MMD anyway
+            if ds.modified != None:
+                # Check if the source file (NetCDF or NCML) has been updated after the MMD was generated
+                dsmodtime = (datetime.strptime(ds.modified,"%Y-%m-%dT%H:%M:%SZ")-epochroot).total_seconds()
+                mmdmodtime = os.path.getmtime('/'.join([newdstdir,outfile]))
+                mylog.info("dst %d - %d", mmdmodtime, dsmodtime)
+                if dsmodtime > mmdmodtime:
+                    mylog.info("%s is updated after the last MMD generation, updating MMD", infile)
+                else:
+                    mylog.info("%s exists and nothing new has happened, skipping now", outfile)
+                    continue
+
         try:
             md = Nc_to_mmd(dstdir, outfile, infile, vocab, False, False, False)
         except Exception as e:
