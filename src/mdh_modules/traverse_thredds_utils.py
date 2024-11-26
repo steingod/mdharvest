@@ -39,7 +39,7 @@ def sanitize_filename(filename):
 
     return sanitized_filename
 
-def traverse_thredds(mystart, dstdir, mydepth, mylog):
+def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
     """
     Actual traversing of THREDDS catalogues for generation of MMD files.
     """
@@ -95,19 +95,20 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
         outfile = os.path.splitext(sanitized_name)[0]+'.xml'
         # Check if this file already exist 
         # Need to update MMD if source (NetCDF or NCML) has been updated since the last run
-        if os.path.isfile('/'.join([newdstdir,outfile])):
-            # Check if modified is available, if not create MMD anyway
-            if ds.modified != None:
-                # Check if the source file (NetCDF or NCML) has been updated after the MMD was generated
-                tmptime = parser.parse(ds.modified)
-                dsmodtime = tmptime.timestamp()
-                mmdmodtime = os.path.getmtime('/'.join([newdstdir,outfile]))
-                mylog.info("dst %d - %d", mmdmodtime, dsmodtime)
-                if dsmodtime > mmdmodtime:
-                    mylog.info("%s is updated after the last MMD generation, updating MMD", infile)
-                else:
-                    mylog.info("%s exists and nothing new has happened, skipping now", outfile)
-                    continue
+        if not force_mmd:
+            if os.path.isfile('/'.join([newdstdir,outfile])):
+                # Check if modified is available, if not create MMD anyway
+                if ds.modified != None:
+                    # Check if the source file (NetCDF or NCML) has been updated after the MMD was generated
+                    tmptime = parser.parse(ds.modified)
+                    dsmodtime = tmptime.timestamp()
+                    mmdmodtime = os.path.getmtime('/'.join([newdstdir,outfile]))
+                    mylog.info("dst %d - %d", mmdmodtime, dsmodtime)
+                    if dsmodtime > mmdmodtime:
+                        mylog.info("%s is updated after the last MMD generation, updating MMD", infile)
+                    else:
+                        mylog.info("%s exists and nothing new has happened, skipping now", outfile)
+                        continue
 
         try:
             md = Nc_to_mmd(dstdir, outfile, infile, vocab, False, False, False)
