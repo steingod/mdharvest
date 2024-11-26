@@ -23,6 +23,7 @@ import lxml.etree as ET
 import uuid
 import re
 from datetime import datetime
+from dateutil import parser
 import pytz
 
 def sanitize_filename(filename):
@@ -98,7 +99,8 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
             # Check if modified is available, if not create MMD anyway
             if ds.modified != None:
                 # Check if the source file (NetCDF or NCML) has been updated after the MMD was generated
-                dsmodtime = (datetime.strptime(ds.modified,"%Y-%m-%dT%H:%M:%SZ")-epochroot).total_seconds()
+                tmptime = parser.parse(ds.modified)
+                dsmodtime = tmptime.timestamp()
                 mmdmodtime = os.path.getmtime('/'.join([newdstdir,outfile]))
                 mylog.info("dst %d - %d", mmdmodtime, dsmodtime)
                 if dsmodtime > mmdmodtime:
