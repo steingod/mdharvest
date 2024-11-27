@@ -14,6 +14,7 @@ NOTES:
 """
 
 import os
+import sys
 import threddsclient
 from mdh_modules.nc_to_mmd import Nc_to_mmd
 import vocab.ControlledVocabulary
@@ -21,8 +22,9 @@ import vocab.CFGCMD
 import lxml.etree as ET
 import uuid
 import re
-#from datetime import datetime
-#import pytz
+from datetime import datetime
+from dateutil import parser
+import pytz
 
 def sanitize_filename(filename):
     """
@@ -37,7 +39,11 @@ def sanitize_filename(filename):
 
     return sanitized_filename
 
-def traverse_thredds(mystart, dstdir, mydepth, mylog):
+def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
+    """
+    Actual traversing of THREDDS catalogues for generation of MMD files.
+    """
+
     mylog.info('Traversing: %s to depth %d', mystart, mydepth)
     #mystart = 'https://thredds.met.no/thredds/arcticdata/arcticdata.xml'
     #print(mystart)
@@ -48,6 +54,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
     else:
         mydir = mystart.replace('catalog.html','')
     #print('>>>', mystart)
+    epochroot = datetime(1970,1,1)
     for ds in threddsclient.crawl(mystart, depth=mydepth):
         mylog.info('Processing:\n\t%s', ds.name)
         #print('\tLanding page:',ds.url,sep='\n\t\t')
@@ -63,7 +70,8 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
         mypath = re.sub('https?://*.*.*/catalog/','',mypath)
         newdstdir = os.path.join(dstdir,mypath)
 
-        #Special handling for specific URL
+        # Special handling for specific provider (NIVA)
+        # FIXME check if needed onwards
         if 'thredds.niva.no' in mystart:
             #Extract common sub-sub path segments
             handle = (ds.url.split('subcatalogs/')[-1])
@@ -73,19 +81,35 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog):
             newdstdir = os.path.join(dstdir, mypath)
 
         #print('>>>',newdstdir)
-        # Make more robust...
+        # Check if destination directory exist, create if not
+        # FIXME Make more robust...
         if not os.path.exists(newdstdir):
             os.makedirs(newdstdir)
+        # Check input filename
         infile = ds.opendap_url()
-        sanitized_name = sanitize_filename(ds.name)
-        outfile = os.path.splitext(sanitized_name)[0]+'.xml'
-        #print('>>>', infile)
         if not infile.lower().endswith(('.nc','.ncml')):
             mylog.info('No NCML or NetCDF file, skipping parsing...')
             continue
-        #print('>>>', outfile)
-        #print('>>>',ds)
-        #print('>>>',ds.url)
+        # Create output filename
+        sanitized_name = sanitize_filename(ds.name)
+        outfile = os.path.splitext(sanitized_name)[0]+'.xml'
+        # Check if this file already exist 
+        # Need to update MMD if source (NetCDF or NCML) has been updated since the last run
+        if not force_mmd:
+            if os.path.isfile('/'.join([newdstdir,outfile])):
+                # Check if modified is available, if not create MMD anyway
+                if ds.modified != None:
+                    # Check if the source file (NetCDF or NCML) has been updated after the MMD was generated
+                    tmptime = parser.parse(ds.modified)
+                    dsmodtime = tmptime.timestamp()
+                    mmdmodtime = os.path.getmtime('/'.join([newdstdir,outfile]))
+                    mylog.info("dst %d - %d", mmdmodtime, dsmodtime)
+                    if dsmodtime > mmdmodtime:
+                        mylog.info("%s is updated after the last MMD generation, updating MMD", infile)
+                    else:
+                        mylog.info("%s exists and nothing new has happened, skipping now", outfile)
+                        continue
+
         try:
             md = Nc_to_mmd(dstdir, outfile, infile, vocab, False, False, False)
         except Exception as e:
