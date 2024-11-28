@@ -54,6 +54,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
     else:
         mydir = mystart.replace('catalog.html','')
     #print('>>>', mystart)
+    myparentid = None
     epochroot = datetime(1970,1,1)
     for ds in threddsclient.crawl(mystart, depth=mydepth):
         mylog.info('Processing:\n\t%s', ds.name)
@@ -125,10 +126,25 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
 
         if myxml is None:
             continue
+        # Assumes that the NCML identifier is valid for all files until the next ncml is found
+        if infile.lower().endswith('.ncml'):
+            myparentid = md.identifier
+        print('########################################################')
+        print('####',myparentid)
         # Modify the XML generated with information from THREDDS
         #print('Parsing XML')
         #myxml = ET.parse(os.path.join(dstdir,outfile))
         myroot = myxml.getroot()
+        # Add parent record if record is deemed child
+        if myparentid:
+            myrelatedds = myxml.find("./mmd:metadata_identifier", myroot.nsmap)
+            if infile.lower().endswith('.nc') and not myrelatedds:
+                print('assumes file to be child')
+                myreldata = ET.Element("{http://www.met.no/schema/mmd}related_dataset")
+                myreldata.set('relation_type','parent')
+                myreldata.text = myparentid
+                myroot.append(myreldata)
+
         # Check and potentially modify identifier
         mynode = myxml.find("./mmd:metadata_identifier", myroot.nsmap)
         #print(mynode.text, ds.url.replace('catalog.xml?dataset=',''))
