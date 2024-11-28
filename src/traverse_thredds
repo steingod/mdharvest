@@ -28,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--depth', type=int, default=3, 
             help='Directory where to put MMD files')
     parser.add_argument("-l","--logfile",dest="logfile", help="Log file", required=True)
+    parser.add_argument("-f","--force",action="store_true", help="Force generation of MMD files")
     
     try:
         args = parser.parse_args()
@@ -40,7 +41,7 @@ if __name__ == '__main__':
     mylog.info('\n==========\nConfiguration of logging is finished.')
 
     try:
-        traverse_thredds(args.starturl, args.dstdir, args.depth, mylog)
+        traverse_thredds(args.starturl, args.dstdir, args.depth, mylog, args.force)
     except Exception as e:
         mylog.error('Something went wrong:', e)
         sys.exit()
