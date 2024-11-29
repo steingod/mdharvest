@@ -38,6 +38,12 @@ if __name__ == '__main__':
                 if collection == 'Use Constraint':
                     licenses = lookup_license(members, vocabno)
                     fullvoc += "".join(collection.split()) + ' = ' + str(licenses) + "\n"
+                elif collection == 'Platform':
+                    platforms = get_platform(members,vocabno)
+                    fullvoc += "".join(collection.split()) + ' = ' + str(platforms) + "\n"
+                elif collection == 'Instrument':
+                    instruments = get_instrument(members,vocabno)
+                    fullvoc += "".join(collection.split()) + ' = ' + str(instruments) + "\n"
                 else:
                     fullvoc += "".join(collection.split()) + ' = ' + str(members) + "\n"
 
@@ -51,6 +57,93 @@ if __name__ == '__main__':
             print('Error fetching MMD concepts: use last fetched vocabulary list!')
 
         return
+
+    def get_platform(short_names,vocabno):
+
+        platforms = {}
+
+        prefixes = '''
+            prefix skos:<http://www.w3.org/2004/02/skos/core#>
+            prefix text:<http://jena.apache.org/text#>
+            prefix rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+            prefix rdfs:<http://www.w3.org/2000/01/rdf-schema#>
+            prefix owl:<http://www.w3.org/2002/07/owl#>
+            prefix dc:<http://purl.org/dc/terms/>'''
+
+        wmosatellites_ref = '''select distinct ?wmosatellites FROM <https://vocab.met.no/mmd> WHERE {
+            ?concept skos:prefLabel "%(short_name)s"@en .
+            ?concept rdfs:seeAlso ?wmosatellites .
+            FILTER (contains(str(?wmosatellites), "wmo"))
+            }'''
+
+        matching_altlabel = '''select distinct ?altLabel FROM <https://vocab.met.no/mmd> WHERE {
+            ?concept skos:prefLabel "%(short_name)s"@en .
+            ?concept skos:altLabel ?altLabel .
+            FILTER (lang(?altLabel) = "en") .
+            }'''
+
+        for short_name in short_names:
+            vocabno.setQuery(prefixes + wmosatellites_ref % {'short_name': short_name})
+            vocabno.setReturnFormat(JSON)
+            wmosatellites = vocabno.query().convert()
+
+            vocabno.setQuery(prefixes + matching_altlabel % {'short_name': short_name})
+            vocabno.setReturnFormat(JSON)
+            altlabel = vocabno.query().convert()
+
+            for result in wmosatellites["results"]["bindings"]:
+                wmo_resource = result['wmosatellites']['value']
+
+            for result in altlabel["results"]["bindings"]:
+                platform_longname = result['altLabel']['value']
+
+            platforms[short_name] = {'wmosatellites_ref' : wmo_resource, 'altLabel' : platform_longname}
+
+        return platforms
+
+    def get_instrument(short_names,vocabno):
+
+        instruments = {}
+
+        prefixes = '''
+            prefix skos:<http://www.w3.org/2004/02/skos/core#>
+            prefix text:<http://jena.apache.org/text#>
+            prefix rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+            prefix rdfs:<http://www.w3.org/2000/01/rdf-schema#>
+            prefix owl:<http://www.w3.org/2002/07/owl#>
+            prefix dc:<http://purl.org/dc/terms/>'''
+
+        wmoinstruments_ref = '''select distinct ?wmoinstruments FROM <https://vocab.met.no/mmd> WHERE {
+            ?concept skos:prefLabel "%(short_name)s"@en .
+            ?concept rdfs:seeAlso ?wmoinstruments .
+            FILTER (contains(str(?wmoinstruments), "wmo"))
+            }'''
+
+        matching_altlabel = '''select distinct ?altLabel FROM <https://vocab.met.no/mmd> WHERE {
+            ?concept skos:prefLabel "%(short_name)s"@en .
+            ?concept skos:altLabel ?altLabel .
+            FILTER (lang(?altLabel) = "en") .
+            }
+            LIMIT 1'''
+
+        for short_name in short_names:
+            vocabno.setQuery(prefixes + wmoinstruments_ref % {'short_name': short_name})
+            vocabno.setReturnFormat(JSON)
+            wmoinstruments = vocabno.query().convert()
+
+            vocabno.setQuery(prefixes + matching_altlabel % {'short_name': short_name})
+            vocabno.setReturnFormat(JSON)
+            altlabel = vocabno.query().convert()
+
+            for result in wmoinstruments["results"]["bindings"]:
+                wmo_resource = result['wmoinstruments']['value']
+
+            for result in altlabel["results"]["bindings"]:
+                instrument_longname = result['altLabel']['value']
+
+            instruments[short_name] = {'wmoinstruments_ref' : wmo_resource, 'altLabel' : instrument_longname}
+
+        return instruments
 
     def lookup_license(list_identifiers,vocabno):
 
@@ -221,6 +314,8 @@ if __name__ == '__main__':
                    'Dataset Production Status',
                    'Related Information Types',
                    'ISO Topic Category',
+                   'Platform',
+                   'Instrument',
                    'Keywords Vocabulary']
         if voc == 'mmd':
             get_MMDvocab(collections, vocabno)
