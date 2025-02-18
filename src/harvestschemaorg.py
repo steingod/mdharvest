@@ -18,10 +18,13 @@ import sys
 import argparse
 import logging
 from logging.handlers import TimedRotatingFileHandler
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from dateutil.parser import parse
 import pandas as pd
 import extruct
+import vocab.ControlledVocabulary
 import requests
+import time
 import lxml.etree as ET
 import urllib.request as ul
 from requests_html import HTMLSession
@@ -32,6 +35,7 @@ from bs4 import BeautifulSoup as bs
 import json
 import datetime as dt
 import gc
+import re
 
 def extract_metadata(url, delayedloading):
     """
@@ -54,7 +58,7 @@ def extract_metadata(url, delayedloading):
     if delayedloading:
         print('Prepared for NSF ADC scraping with delayed loading of pages.')
         waitingtime = 15
-        sleeptime = 3
+        sleeptime = 10
 
     resp.html.render(wait=waitingtime, sleep=sleeptime)
     #print(resp.html.render(wait=15, sleep=3))
@@ -65,11 +69,40 @@ def extract_metadata(url, delayedloading):
     del resp
 
     #print(metadata)
-    if len(metadata['json-ld']) == 0:
+    if len(metadata['json-ld']) == 0 or 'Dataset' not in metadata['json-ld'][0]['@type']:
         raise TypeError('No valid SOSO JSON-LD available')
 
+    s.close()
+    del s
     # Beware, this may fail if invalid soso
     return metadata['json-ld'][0]
+
+def pangaeaapicall(url):
+    """
+    Designed for PANGAEA. This is the fastest solution. All jsonld records are available at the url+?format=metadata_jsonld
+    Response headers give the Retry-After information which should be followed in case of status 429 (Too many requests).
+    """
+
+    myapi = url+"?format=metadata_jsonld"
+    print('>>> my api call: ', myapi)
+    mypage = requests.get(myapi)
+    print('Response code: ', mypage.status_code)
+    if mypage.status_code == 200:
+        print('Processing page... ')
+        metadata = mypage.json()
+    elif mypage.status_code == 429:
+        #print('headers',mypage.headers)
+        #print('wait')
+        time.sleep(int(mypage.headers['Retry-After']))
+        mypage = requests.get(myapi)
+        print('Response code: ', mypage.status_code)
+        metadata = mypage.json()
+        #print(metadata)
+    else:
+        print('pangaea metadata_json not reponding')
+        return(None)
+
+    return metadata
 
 def ccadiapicall(url, dstdir):
     """
@@ -110,50 +143,137 @@ def ccadiapicall(url, dstdir):
 
     return
 
-def traversesite(url, dstdir, delayedloading):
+def traversesite(url, dstdir, delayedloading, lastmodday):
     """
     Traverse the sitemap and extract information
     Works on NSF ADC not on GEM yet as their sitemap is different
     NSF ADC embeds JSON-LD while GEM links. Rewriting URL's for GEM to avopid overhead for reading sitemap and JSON-LD linked files.
     """
+    today = date.today()
+    if lastmodday:
+        toharvest = today - timedelta(days=int(lastmodday))
 
-    # Read sitemap
+    # Read sitemap or sitemapindex
     mypage = requests.get(url)
     sitefile = mypage.content
     mysoup = bs(sitefile, features="lxml")
-    news = [i.text for i in mysoup.find_all('loc')]
-
-    for el in news:
-        url2read = el.strip()
-        # Rewrite GEM URLs to avoid reading linked files (no obvious and unique linking convention)
-        if "https://data.g-e-m.dk/Datasets" in url2read:
-            print("Rewriting GEM dataset links")
-            tmp = url2read.replace("https://data.g-e-m.dk/Datasets","https://data.g-e-m.dk/umbraco/surface/gemsurface/DatasetSchemaOrg")
-            url2read = tmp
-        print('Extracting information from: [%s]' % url2read)
-        try:
-            sosomd = extract_metadata(url2read, delayedloading)
-        except Exception as e:
-            print('Error returned: ',e)
-            continue
-        mmd = sosomd2mmd(sosomd)
-        if mmd == None:
-            print('Record is not complete and is skipped...')
-            continue
-        # Dump MMD file
-        #output_file = 'mytestfile.xml' # while testing...
-        if 'http' in sosomd['identifier']:
-            tmpname = sosomd['identifier'].split('/')[-1]
+    #check if this is a list of sitemaps
+    sitemap_tags = mysoup.find_all("sitemap")
+    if len(sitemap_tags) > 0:
+        print('it is a list of sitemaps')
+        list_sitemaps = [i.text for i in mysoup.find_all('loc')]
+        news = []
+        for sitemap in list_sitemaps:
+            mypage = requests.get(sitemap)
+            sitefile = mypage.content
+            mysoup = bs(sitefile, features="lxml")
+            if lastmodday:
+                print("Parsing only records newer then: ", toharvest)
+                news += [i.text for i in mysoup.find_all('loc') if datetime.strptime(i.find_next_sibling("lastmod").text, "%Y-%m-%d").date() > toharvest]
+            else:
+                news += [i.text for i in mysoup.find_all('loc')]
+            print(len(news))
+    elif 'https://api.g-e-m.dk/api/dataset/harvest' in url:
+        #for gem there is no loc, but directly the list of scripts. Does not support lastmod
+        news = [ json.loads(x.string) for x in mysoup.find_all("script", type="application/ld+json")]
+    else:
+        if lastmodday:
+            print("Parsing only records newer then: ", toharvest)
+            news = [i.text for i in mysoup.find_all('loc') if datetime.strptime(i.find_next_sibling("lastmod").text, "%Y-%m-%d").date() > toharvest]
+            #news = []
+            #for i in mysoup.find_all('loc'):
+            #    #print(i.find_next_sibling("lastmod"))
+            #    #print(i.find_next_sibling("lastmod").text)
+            #    #print(datetime.strptime(i.find_next_sibling("lastmod").text, "%Y-%m-%d"))
+            #    #print(datetime.strptime(i.find_next_sibling("lastmod").text, "%Y-%m-%d").date())
+            #    if datetime.strptime(i.find_next_sibling("lastmod").text, "%Y-%m-%d").date() > toharvest:
+            #        news.append(i.text)
         else:
-            tmpname = sosomd['identifier']
-        filename = tmpname.replace('.','-')+'.xml' 
-        output_file = dstdir+'/'+filename
-        print(output_file)
-        et = ET.ElementTree(mmd)
-        et.write(output_file, pretty_print=True)
-        del sosomd
-        del mmd
-        del et
+            news = [i.text for i in mysoup.find_all('loc')]
+
+    del mypage
+    del sitefile
+    del mysoup
+
+    batchsize = 50
+    print('Number of items to be parsed', len(news))
+    for i in range(0, len(news), batchsize):
+        batch = news[i:i+batchsize]
+        print('batch', i, i+batchsize)
+        for el in batch:
+            #for non gem we have the url from sitemap
+            if isinstance(el,str):
+                print(el)
+                url2read = el.strip()
+                # Rewrite GEM URLs to avoid reading linked files (no obvious and unique linking convention)
+                #if "https://data.g-e-m.dk/Datasets" in url2read:
+                #    print("Rewriting GEM dataset links")
+                #    tmp = url2read.replace("https://data.g-e-m.dk/Datasets","https://data.g-e-m.dk/umbraco/surface/gemsurface/DatasetSchemaOrg")
+                #    url2read = tmp
+                print('Extracting information from: [%s]' % url2read)
+                try:
+                    if 'doi.pangaea.de' in url2read:
+                        sosomd = pangaeaapicall(url2read)
+                    else:
+                        sosomd = extract_metadata(url2read, delayedloading)
+                except Exception as e:
+                    print('Error returned: ',e)
+                    continue
+            else:
+                # for gem we can directly get the schema.org info in the form of dict
+                sosomd = el
+            mmd = sosomd2mmd(sosomd)
+            if mmd == None:
+                print('Record is not complete and is skipped...')
+                continue
+            # Dump MMD file
+            #output_file = 'mytestfile.xml' # while testing...
+            #PANGAEA does not always have identifiers. Sometimes it uses url
+            #print('sosomd')
+            if 'identifier' in sosomd:
+                if isinstance(sosomd['identifier'],str):
+                    if 'http' in sosomd['identifier']:
+                        # TODO fix when 'identifier': 'https://pasta.lternet.edu/package/metadata/eml/knb-lter-arc/20033/7'
+                        if 'eml/knb-lter-arc' in sosomd['identifier']:
+                            # Harvesting  will not come here for now
+                            tmpname = sosomd['identifier'].split('eml')[-1]
+                        else:
+                            tmpname = sosomd['identifier'].split('/')[-1]
+                    else:
+                        tmpname = sosomd['identifier']
+                else:
+                    #cover soso identifier with PropertyValue, e.g. : "value": "doi:10.5066/F7VX0DMQ",
+                    if 'value' in  sosomd['identifier']:
+                        tmpname = sosomd['identifier']['value']
+                    else:
+                        print('identifier cannot be paresed')
+                        continue
+            elif 'url' in sosomd:
+                if 'doi.pangaea.de/' in sosomd['url']:
+                   tmpname = sosomd['url'].split('/')[-1]
+                else:
+                    print('Record does not have identifier or url and is skipped...')
+                    continue
+            else:
+                print('Record does not have identifier or url and is skipped...')
+                continue
+            if ':' in tmpname or '.' in tmpname or '/' in tmpname:
+                filename = tmpname.replace(':','-').replace('.','-').replace('/','-')+'.xml'
+            else:
+                filename = tmpname+'.xml'
+            print('filename',filename)
+            #print(filename)
+            output_file = dstdir+'/'+filename
+            #print(output_file)
+            et = ET.ElementTree(mmd)
+            et.write(output_file, pretty_print=True)
+            del sosomd
+            del mmd
+            del et
+            del output_file
+            del tmpname
+            gc.collect()
+        del batch
         gc.collect()
 
     return
@@ -170,16 +290,30 @@ def sosomd2mmd(sosomd):
     ET.register_namespace('mmd',"http://www.met.no/schema/mmd")
     ns_map = {'mmd': "http://www.met.no/schema/mmd"}
              # 'gml': "http://www.opengis.net/gml"}
-    
+
     myroot = ET.Element(ET.QName(ns_map['mmd'], 'mmd'), nsmap=ns_map)
 
     # Get all keys from JSON for further use
     mykeys = sosomd.keys()
     #print(mykeys)
+    if 'Dataset' not in sosomd['@type']:
+        print("Not a dataset")
+        return None
 
     # Extract the identifier, assumed to always be present
+
+    # Note on PANGAEA. Common representation of fully published identifiers:
+    # "@id":"https://doi.org/10.1594/PANGAEA.846617",
+    # "identifier":"https://doi.org/10.1594/PANGAEA.846617",
+    # "url":"https://doi.pangaea.de/10.1594/PANGAEA.846617"
+    # and for under review/waiting for publication only the url is present:
+    # "url":"https://doi.pangaea.de/10.1594/PANGAEA.974493"
+    # this url is also used as reference from isPartOf.
+
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_identifier'))
     if 'identifier' in mykeys:
+        #print(sosomd['identifier'], type(sosomd['identifier']))
+        #it could be a schema:PropertyValue (recommended by SOSO). That would be a dict with: @id, @type, propertyID, value and url.
         if isinstance(sosomd['identifier'], dict):
             if 'value' in sosomd['identifier'].keys():
                 myel.text = sosomd['identifier']['value']
@@ -187,144 +321,327 @@ def sosomd2mmd(sosomd):
                 print('Not handled yet')
                 return None
         else:
-            myel.text = sosomd['identifier']
+            #or it could be a simple string for text or url.
+            #print(sosomd['identifier'], type(sosomd['identifier']))
+            if 'doi.org/' in sosomd['identifier']:
+                myel.text = 'doi:' + sosomd['identifier'].split('doi.org/')[-1]
+            else:
+                # TODO fix when 'identifier': 'https://pasta.lternet.edu/package/metadata/eml/knb-lter-arc/20033/7'
+                if 'http' in sosomd['identifier'] and 'eml/knb-lter-arc' in sosomd['identifier']:
+                    print('identifier is a url. Skip for now')
+                    #myel.text = sosomd['identifier'].split('eml')[-1].replace('/','-')
+                    return None
+                else:
+                    myel.text = sosomd['identifier']
     elif 'url' in mykeys:
+        #print('url',myel.text)
         if 'PDCSearch' in sosomd['url']:
             myel.text = "PDC-"+sosomd['url'].split("=",1)[1]
+        elif 'doi.pangaea.de/' in sosomd['url']:
+            myel.text = 'doi:' + sosomd['url'].split('doi.pangaea.de/')[-1]
+        else:
+            print('Cannot retrieve identifier...')
+            return None
     else:
         print('Cannot retrieve identifier...')
-        sys.exit()
+        return None
 
-    # Get metadata update
-    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'last_metadata_update'))
-    myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
-    myel3 = ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime'))
-    if 'datePublished' in sosomd:
-        myel3.text = sosomd['datePublished']
+    # Get title, assumed to always be present / NSF has some records without
+    if 'name' in sosomd:
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'title'))
+        myel.text = sosomd['name']
+        myel.set('{http://www.w3.org/XML/1998/namespace}lang','en')
     else:
-        print('datePublished not found in record, leaving empty...')
-    ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Created'
-    ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
-    if 'dateModified' in sosomd:
-        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
-        ET.SubElement(myel2,
-                ET.QName(ns_map['mmd'],'datetime')).text = sosomd['dateModified']
-        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Updated'
-        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
+        print('No title available, skipping records')
+        return(None)
+
+    # Get abstract, assumed to always be present
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'abstract'))
+    if isinstance(sosomd['description'], dict):
+        #for gem
+        myel.text = sosomd['description']['@value']
+    else:
+        myel.text = sosomd['description']
+    myel.set('{http://www.w3.org/XML/1998/namespace}lang','en')
 
     # Set metadata status
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_status'))
     myel.text = 'Active'
 
-    # Get title, assumed to always be present
-    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'title'))
-    myel.text = sosomd['name']
-    myel.set('lang','en')
+    # Set dataset production status
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'dataset_production_status'))
+    myel.text = 'Not available'
 
-    # Get abstract, assumed to always be present
-    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'abstract'))
-    myel.text = sosomd['description']
-    myel.set('lang','en')
+    # Set collection - TODO remove after testing
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+    myel.text = 'ADC'
+
+    # Get metadata update
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'last_metadata_update'))
+    myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
+    myel3 = ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime'))
+    customnote = False
+    if 'datePublished' in sosomd:
+        tmpdatetime = sosomd['datePublished']
+        date_str = r'^\d{4}-\d{2}-\d{2}$'
+        year_str = r'^\d{4}$'
+        if re.match(date_str, tmpdatetime):
+            tmpdatetime +='T12:00:00Z'
+        elif re.match(year_str, tmpdatetime):
+            tmpdatetime += '-01-01T12:00:00Z'
+            customnote = True
+        myel3.text = tmpdatetime
+    else:
+        print('datePublished not found in record, leaving empty...')
+    ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Created'
+    if customnote is True:
+        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record - Only year is known from source'
+    else:
+        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
+    if 'dateModified' in sosomd:
+        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
+        ET.SubElement(myel2,
+                ET.QName(ns_map['mmd'],'datetime')).text = sosomd['dateModified']
+        #we do not know what has been modified. Set to Major modification
+        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Major modification'
+        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
+
     # Get temporal extent, if not present dataset is not handled
     # FIXME need to reformat strings to match mmd
     # Double check, could be that this is instantaneous dataset and not ongoing
-    if 'temporalCoverage' in sosomd:
+    # gem is using " - " instead of "/" as separator and it can have empty string
+    if 'temporalCoverage' in sosomd and sosomd['temporalCoverage']:
+        date_str = r'^\d{4}-\d{2}-\d{2}$'
+        year_str = r'^\d{4}$'
+
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'temporal_extent'))
+        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'start_date'))
+
         if '/' in sosomd['temporalCoverage']:
             tempcov = sosomd['temporalCoverage'].split('/')
-            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'temporal_extent'))
-            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'start_date'))
+            for i,t in enumerate(tempcov):
+                parsedt = parse(t)
+                if not parsedt.tzinfo:
+                    tempcov[i] += 'Z'
+                elif parsedt.tzinfo:
+                    continue
+                else:
+                    print('temporal range is not Not a datetime')
             myel2.text = tempcov[0]
-            if tempcov[1]:
+            if tempcov[1] and tempcov[1] != '..':
+                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
+                myel2.text = tempcov[1]
+        elif ' - ' in sosomd['temporalCoverage']:
+            tempcov = sosomd['temporalCoverage'].split(' - ')
+            for i,t in enumerate(tempcov):
+                parsedt = parse(t)
+                if not parsedt.tzinfo:
+                    if re.match(date_str, t):
+                        tempcov[i] +='T12:00:00Z'
+                elif parsedt.tzinfo:
+                    continue
+                else:
+                    print('temporal range is not Not a datetime')
+            myel2.text = tempcov[0]
+            if tempcov[1] and tempcov[1] != '..':
                 myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
                 myel2.text = tempcov[1]
         else:
-            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'temporal_extent'))
-            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'start_date'))
-            myel2.text = sosomd['temporalCoverage']
+            tempcov = sosomd['temporalCoverage']
+            parsedt = parse(tempcov)
+            if not parsedt.tzinfo:
+                tempcov +='Z'
+            else:
+                print('temporal range is not Not a datetime')
+            myel2.text = tempcov
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
+            myel2.text = tempcov
     else:
         print('No temporal specification for dataset, skipping record...')
-        return None
+        return(None)
 
-    # Geographical extent 
-    if 'spatialCoverage' in mykeys:
-        geokeys = sosomd['spatialCoverage']['geo'].keys()
-        # FIXME for PDC this reverts lat/lon
-        if 'box' in sosomd['spatialCoverage']['geo']:
-            geobox = sosomd['spatialCoverage']['geo']['box'].split(' ')
-            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographical_extent'))
-            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
-            # Need to be made more robust
-            if 'additionalProperty' in sosomd['spatialCoverage']:
-                if 'CRS84' in sosomd['spatialCoverage']['additionalProperty'][0]['value']:
-                    myel.set('srsName','EPSG;4326')
-                else:
-                    myel.set('srsName','EPSG;4326')
-            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'north'))
-            myel3.text = geobox[3]
-            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'south'))
-            myel3.text =  geobox[1]
-            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'west'))
-            myel3.text =  geobox[0].rstrip(',')
-            myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'east'))
-            myel3.text =  geobox[2].rstrip(',')
-        else:
-            # Handle point from PANGEA, could be more thatdoes like this...
-            # FIXME check that no bounding boxes are presented this way
-            if 'latitude' in geokeys and 'longitude' in geokeys:
-                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographical_extent'))
-                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
-                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'north'))
-                myel3.text = str(sosomd['spatialCoverage']['geo']['latitude'])
-                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'south'))
-                myel3.text =  str(sosomd['spatialCoverage']['geo']['latitude'])
-                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'west'))
-                myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
-                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'east'))
-                myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
-            else:
-                print('Only supporting bounding boxes for now, skipping record')
-                return(None)
+    # Set iso_topic_category
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'iso_topic_category'))
+    myel.text = 'Not available'
+
     # keywords are separated by ','. Not all are using this...
     # failing here now Øystein Godøy, METNO/FOU, 2023-11-02  for pdc
-    if 'keywords' in mykeys: 
-        mykws = sosomd['keywords'].split(',')
-        #mykws = sosomd['keywords']
-        for kw in mykws:
-            if 'UNKNOWN' in kw.upper():
-                continue
-            if 'EARTH SCIENCE' in kw.upper():
-                if 'myelgcmd' not in locals():
-                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
-                    myel.set('vocabulary','GCMDSK')
-                myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                myelgcmd.text = kw.strip()
-            elif 'IN SITU/LABORATORY INSTRUMENTS' in kw.upper():
-                continue # while testing
-                if 'myplatform' not in locals():
-                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
-                    myel.set('vocabulary','GCMDSK')
-                myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                myelgcmd.text = kw.strip()
-            else:
-                if 'myelnone' not in locals():
-                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
-                    myel.set('vocabulary','none')
-                myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                myelgcmd.text = kw.strip()
+    # This could also be a string ("keywords":"fish monitoring; Sylt Roads; Wadden Sea")
+    # or SOSO as text:
+    # "keywords": ["ocean acidification", "Dissolved Organic Carbon", "bacterioplankton respiration", "pCO2", "carbon dioxide", "oceans"]
+    # or SOSO as DefinedTerm (recommend):
+    # "keywords": [
+    # {
+    #  "@type": "DefinedTerm",
+    #  "name": "OCEANS",
+    #  "inDefinedTermSet": "https://gcmd.earthdata.nasa.gov/kms/concepts/concept_scheme/sciencekeywords",
+    #  "url": "https://gcmd.earthdata.nasa.gov/kms/concept/91697b7d-8f2b-4954-850e-61d5f61c867d", (optional)
+    #  "termCode": "91697b7d-8f2b-4954-850e-61d5f61c867d" (optional)
+    # },...
+    # It is also provided as empty list
+    if 'keywords' in mykeys:
+        keywords = True
+        if isinstance(sosomd['keywords'],str):
+            sosomd['keywords'].replace(';', ',')
+            mykws = sosomd['keywords'].split(',')
+        elif isinstance(sosomd['keywords'],list) and len(sosomd['keywords']) > 0:
+            mykws = sosomd['keywords']
+        else:
+            print('Cannot parse keywords element')
+            keywords = False
+        if keywords:
+            for kw in mykws:
+                if isinstance(kw,str):
+                    if 'UNKNOWN' in kw.upper():
+                        continue
+                    if 'EARTH SCIENCE' in kw.upper():
+                        if 'myelgcmd' not in locals():
+                            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                            myel.set('vocabulary','GCMDSK')
+                        myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                        myelgcmd.text = kw.strip()
+                    elif 'IN SITU/LABORATORY INSTRUMENTS' in kw.upper():
+                        continue # while testing
+                        if 'myplatform' not in locals():
+                            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                            myel.set('vocabulary','GCMDSK')
+                        myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                        myelgcmd.text = kw.strip()
+                    else:
+                        if 'myelnone' not in locals():
+                            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                            myel.set('vocabulary','None')
+                        myelnone = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                        myelnone.text = kw.strip()
+                elif isinstance(kw,dict):
+                    if kw['@type'] == 'DefinedTerm':
+                        if 'sciencekeywords' in kw['inDefinedTermSet']:
+                            if 'myelgcmd' not in locals():
+                                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                                myel.set('vocabulary','GCMDSK')
+                            myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                            myelgcmd.text = kw['name']
+                        if 'vocab.nerc.ac.uk/standard_name' in kw['inDefinedTermSet'] or 'vocab.nerc.ac.uk/collection/P07/' in kw['inDefinedTermSet']:
+                            if 'myelcfstdn' not in locals():
+                                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                                myel.set('vocabulary','CFSTDN')
+                            myelcfstdn = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                            myelcfstdn.text = kw['name']
+        else:
+            print('Keywords found, but empty')
+
 
     # Extract variable information
     # FIXME check ontology references later
     # Need to be expanded
+    # schema.org allows the value of variableMeasured to be a simple text string, but SOSO strongly recommends to use the schema:PropertyValue type
     if 'variableMeasured' in mykeys:
         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
         myel.set('vocabulary','None')
-        for el in sosomd['variableMeasured']:
+        if isinstance(sosomd['variableMeasured'],list):
+            if len(sosomd['variableMeasured']) >0:
+                for el in sosomd['variableMeasured']:
+                    if isinstance(el, dict):
+                        myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                        myelkw.text = el['name']
+                        #it is possible to extract other vocabularies. Check for CF
+                        #if 'subjectOf' in el:
+                        #    if isinstance(el['subjectOf']['hasDefinedTerm'],list):
+                        #        for i in el['subjectOf']['hasDefinedTerm']:
+                        #            if isinstance(i,dict) and 'url' in i.keys() or 'url' in i:
+                        #                if 'vocab.nerc.ac.uk/collection/P07/' in i['url']:
+                        #                    print('standard name')
+                        #    else:
+                        #        if isinstance(el['subjectOf']['hasDefinedTerm'],dict) and 'url' in el['subjectOf']['hasDefinedTerm'].keys() or 'url' in el['subjectOf']['hasDefinedTerm']:
+                        #            if 'vocab.nerc.ac.uk/collection/P07/' in el['subjectOf']['hasDefinedTerm']['url']:
+                        #                print('standard name')
+                    else:
+                        myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                        myelkw.text = el
+            else:
+                myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                myelkw.text = ''
+        else:
             myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-            myelkw.text = el['name']
+            myelkw.text = sosomd['variableMeasured']['name']
+
+
+    #test for PANGAEA to add keywords from title
+    if ('keywords' not in mykeys or not keywords) and 'variableMeasured' not in mykeys:
+        if 'Documentation of sediment core' in sosomd['name']:
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+            myel.set('vocabulary','GCMDSK')
+            myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+            myelgcmd.text = 'EARTH SCIENCE > PALEOCLIMATE > OCEAN/LAKE RECORDS > SEDIMENT CORE'
+        else:
+            #leave empty keywords - it is mandatory in mmd but still it will not be indexed if empty
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+            myel.set('vocabulary','None')
+            ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+
+
+    # Geographical extent
+    #geoshape/box def: A box is the area enclosed by the rectangle formed by two points. The first point is the lower
+    #corner, the second point is the upper corner. A box is expressed as two points separated by a space character.
+    # south-west-north-east
+    if 'spatialCoverage' in mykeys:
+        geokeys = sosomd['spatialCoverage']['geo'].keys()
+        # FIXME for PDC this reverts lat/lon
+        if 'box' in sosomd['spatialCoverage']['geo']:
+            #NSF/ADC has records with 'box': '-180, 45 180, 90' with "W,S E,N" (instead of "S W N E")
+            if ',' in sosomd['spatialCoverage']['geo']['box']:
+                geobox = sosomd['spatialCoverage']['geo']['box'].replace(',', '').split(' ')
+                tmp = [geobox[1], geobox[0], geobox[3], geobox[2]]
+                geobox = tmp
+            else:
+                geobox = sosomd['spatialCoverage']['geo']['box'].split(' ')
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographic_extent'))
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
+            # Need to be made more robust
+            if 'additionalProperty' in sosomd['spatialCoverage']:
+                if isinstance(sosomd['spatialCoverage']['additionalProperty'],list):
+                    crs = sosomd['spatialCoverage']['additionalProperty'][0]['value']
+                else:
+                    crs = sosomd['spatialCoverage']['additionalProperty']['value']
+                if 'CRS84' in crs:
+                    myel2.set('srsName','EPSG:4326')
+                else:
+                    myel2.set('srsName','EPSG:4326')
+            else:
+                myel2.set('srsName','EPSG:4326')
+
+            myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'north'))
+            myel3.text = geobox[2]
+            myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'south'))
+            myel3.text =  geobox[0]
+            myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'west'))
+            myel3.text =  geobox[1].rstrip(',')
+            myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'east'))
+            myel3.text =  geobox[3].rstrip(',')
+        else:
+            # Handle point from PANGEA, could be more thatdoes like this...
+            # FIXME check that no bounding boxes are presented this way
+            if 'latitude' in geokeys and 'longitude' in geokeys:
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographic_extent'))
+                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
+                myel2.set('srsName','EPSG:4326')
+                myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'north'))
+                myel3.text = str(sosomd['spatialCoverage']['geo']['latitude'])
+                myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'south'))
+                myel3.text =  str(sosomd['spatialCoverage']['geo']['latitude'])
+                myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'west'))
+                myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
+                myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'east'))
+                myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
+            else:
+                print('Only supporting bounding boxes for now, skipping record')
+                return(None)
 
     # related_information, assuming primarily landing pages are conveyed
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_information'))
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'type'))
+    myel2.text = "Dataset landing page"
+    myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'description'))
     myel2.text = "Dataset landing page"
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
     myel2.text = sosomd['url']
@@ -332,60 +649,127 @@ def sosomd2mmd(sosomd):
     # Get personnel involved
     # FIXME not sure how to differentiate roles
     if 'creator' in mykeys:
-        #print(sosomd['creator'])
         if isinstance(sosomd['creator'],list):
             for el in sosomd['creator']:
-                #print(el)
                 myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'personnel'))
                 myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'role'))
+                myel2.text = 'Investigator'
+                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'name'))
                 myel2.text = el['name']
                 if 'email' in el.keys():
                     myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
                     myel3.text = el['email']
+                else:
+                    myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
+                    myel3.text = ''
                 # sosomd['creator'] type og name
         else:
             myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'personnel'))
             myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'role'))
+            myel2.text = 'Investigator'
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'name'))
             myel2.text = sosomd['creator']['name']
             if 'email' in sosomd['creator'].keys():
                 myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
                 myel3.text = sosomd['creator']['email']
+            else:
+                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
+                myel3.text = ''
+
+    #test contributors
+    if 'contributor' in mykeys:
+        print('some additional personnel')
 
     # Get data centre
     if 'publisher' in mykeys:
         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'data_center'))
         myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'data_center_name'))
-        myel21 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
+        myel21 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'short_name'))
         myel21.text = sosomd['publisher']['name']
-        myel22 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
-        myel22.text = sosomd['publisher']['name']
+        myel22 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'long_name'))
+        if 'disambiguatingDescription' in sosomd['publisher']:
+            myel22.text = sosomd['publisher']['disambiguatingDescription']
+        else:
+            myel22.text = sosomd['publisher']['name']
         myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'data_center_url'))
-        myel3.text = sosomd['publisher']['url']
+        if 'url' in sosomd['publisher']:
+            myel3.text = sosomd['publisher']['url']
+        else:
+            myel3.text = ''
+
+
+    # Get project. Sometimes it is a list of dicts, othertimes it's a dict
+    if 'funding' in mykeys:
+        if isinstance(sosomd['funding'],list):
+            for i in sosomd['funding']:
+                if  i['@type'] == 'MonetaryGrant':
+                    if 'name' in i:
+                        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
+                        myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
+                        if 'alternateName' in  i.keys():
+                            myel1.text = i['alternateName']
+                        else:
+                            myel1.text = i['name']
+                        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
+                        myel2.text = i['name']
+        else:
+            if  sosomd['funding']['@type'] == 'MonetaryGrant' and 'name' in sosomd['funding']:
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
+                myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
+                if 'alternateName' in  sosomd['funding'].keys():
+                    myel1.text = sosomd['funding']['alternateName']
+                else:
+                    myel1.text = sosomd['funding']['name']
+                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
+                myel2.text = sosomd['funding']['name']
+
 
     # Get license
     # FIXME identifier is only tested on PANGAEA so far...
     if 'license' in mykeys:
-        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'use_constraint'))
-        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
-        myel2.text = sosomd['license']
-        myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'identifier'))
-        # sosomd['isAccessibleForFree'] true or false check...
-        if '/by/' in sosomd['license']:
-            print('Assuming a CC license...')
-            myidentifier = 'CC-BY'
-            myel3.text = myidentifier
+        license_lookup = vocab.ControlledVocabulary.UseConstraint
+        mylicense = sosomd['license']
+        for k, v in license_lookup.items():
+            if mylicense in v['exactMatch']:
+                licenseid = k
+                if 'spdx' in mylicense:
+                    licenseurl = mylicense
+                else:
+                    licenseurl = ''.join(i for i in license_lookup[licenseid]['exactMatch'] if 'spdx' in i)
+                break
+            else:
+                mytext = mylicense
+                licenseid = None
+                licenseurl = None
+
+        myel = ET.SubElement(myroot, ET.QName(ns_map['mmd'], 'use_constraint'))
+        if licenseid:
+            ET.SubElement(myel, ET.QName(ns_map['mmd'], 'identifier')).text = licenseid
+            ET.SubElement(myel, ET.QName(ns_map['mmd'], 'resource')).text = licenseurl
+        else:
+            ET.SubElement(myel, ET.QName(ns_map['mmd'], 'license_text')).text = mytext
+
+    #add access_constraint
+    if 'conditionsOfAccess' in mykeys:
+        if sosomd['conditionsOfAccess'] == 'unrestricted':
+            myel = ET.SubElement(myroot, ET.QName(ns_map['mmd'], 'access_constraint'))
+            myel.text = 'Open'
 
     # Get data_access information
     if 'distribution' in mykeys:
         if isinstance(sosomd['distribution'], list):
             for el in sosomd['distribution']:
                 if el['@type'] == "DataDownload":
-                    if el['encodingFormat'] == "text/tab-separated-values":
+                    #encodingFormat is not always present.
+                    if 'encodingFormat' in el.keys() and (el['encodingFormat'] == "text/tab-separated-values" or el['encodingFormat'] == "application/zip" or el['encodingFormat'] == "text/csv, application/excel"):
                         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'data_access'))
                         myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'type'))
                         myel2.text = 'HTTP'
                         myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
                         myel3.text = el['contentUrl']
+                        myel4 = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'storage_information'))
+                        myel5 = ET.SubElement(myel4,ET.QName(ns_map['mmd'],'file_format'))
+                        myel5.text = el['encodingFormat']
 
         else:
             print('To be handled later...')
@@ -393,11 +777,33 @@ def sosomd2mmd(sosomd):
     # Get parent/child information
     if 'isPartOf' in mykeys:
         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_dataset'))
-        myel.text = sosomd['isPartOf']
+        #parse from url
+        if 'doi.pangaea.de/' in sosomd['isPartOf']:
+            myel.text = 'doi:' + sosomd['isPartOf'].split('doi.pangaea.de/')[-1]
+        elif 'doi.org/' in sosomd['isPartOf']:
+            myel.text = 'doi:' + sosomd['isPartOf'].split('doi.org/')[-1]
+        else:
+            myel.text = sosomd['isPartOf']
         myel.set('relation_type','parent')
+
+    #data citation DOI
+    if 'identifier' in mykeys:
+        if isinstance(sosomd['identifier'],str):
+            if 'doi.org' in sosomd['identifier']:
+                myel = ET.SubElement(myroot, ET.QName(ns_map['mmd'], 'dataset_citation'))
+                myel2 = ET.SubElement(myel, ET.QName(ns_map['mmd'], 'doi'))
+                myel2.text = sosomd['identifier']
+        else:
+            if 'url' in sosomd['identifier'] and 'doi.org' in sosomd['identifier']['url']:
+                myel = ET.SubElement(myroot, ET.QName(ns_map['mmd'], 'dataset_citation'))
+                myel2 = ET.SubElement(myel, ET.QName(ns_map['mmd'], 'doi'))
+                myel2.text = sosomd['identifier']['url']
+
 
     #print(ET.tostring(myroot, pretty_print=True, encoding='unicode'))
     #sys.exit()
+    del mykeys
+    del myel
     return myroot
 
 """
@@ -412,18 +818,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='Traverse a sitemap to retrieve schema.org '+
             'discovery metadata to MMD. Provide the sitemap as input.', epilog="NSF ADC is serving schem.org through Javascript pages that are slow loading. Thus for scraping NSF ADC option d is required.")
-    parser.add_argument('starturl', type=str, 
-            help='URL to sitemap')
-    parser.add_argument('dstdir', type=str, 
-            help='Directory where to put MMD files')
+    parser.add_argument('starturl', type=str, help='URL to sitemap')
+    parser.add_argument('dstdir', type=str, help='Directory where to put MMD files')
     parser.add_argument('-c', '--ccadi-api', dest='ccadiapi', action='store_true')
     parser.add_argument('-d', '--delayed-loading', dest='delayedloading', action='store_true')
+    parser.add_argument('-l', '--last-modified-day', dest="lastmodday", type=str, help="harvest only the modified in the last X day")
     try:
         args = parser.parse_args()
     except:
         parser.print_help()
         sys.exit()
-    
+
     if args.ccadiapi:
         try:
             ccadiapicall(args.starturl, args.dstdir)
@@ -432,7 +837,7 @@ if __name__ == '__main__':
             sys.exit()
     else:
         try:
-            traversesite(args.starturl, args.dstdir, args.delayedloading)
+            traversesite(args.starturl, args.dstdir, args.delayedloading, args.lastmodday)
         except Exception as e:
             print('Something went wrong:', e)
             sys.exit()
