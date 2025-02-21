@@ -18,16 +18,16 @@ import sys
 import argparse
 import logging
 from logging.handlers import TimedRotatingFileHandler
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from dateutil.parser import parse
 import pandas as pd
-import extruct
+#import extruct
 import vocab.ControlledVocabulary
 import requests
 import time
 import lxml.etree as ET
 import urllib.request as ul
-from requests_html import HTMLSession
+#from requests_html import HTMLSession
 from w3lib.html import get_base_url
 from urllib.parse import urlparse
 import json
@@ -37,45 +37,45 @@ import datetime as dt
 import gc
 import re
 
-def extract_metadata(url, delayedloading):
-    """
-    Extract metadata from webpage. Using requests_html since NSF ADC is using Javascript to render pages...
-    """
-
-    # Use requests_html
-    #print('>>>>>', url)
-    s = HTMLSession()
-    try:
-        resp = s.get(url)
-    except Exception as e:
-        print(resp)
-        return(None)
-
-    # wait is before and sleep is after render is done
-    # Make this configurable depending on source
-    waitingtime = 0
-    sleeptime = 0
-    if delayedloading:
-        print('Prepared for NSF ADC scraping with delayed loading of pages.')
-        waitingtime = 15
-        sleeptime = 10
-
-    resp.html.render(wait=waitingtime, sleep=sleeptime)
-    #print(resp.html.render(wait=15, sleep=3))
-
-    # Extract information from HTML
-    metadata = extruct.extract(resp.html.html, base_url=url)
-    #metadata_box = extruct.extract("https://data.g-e-m.dk/Datasets?doi=10.17897/KBN7-WP73")
-    del resp
-
-    #print(metadata)
-    if len(metadata['json-ld']) == 0 or 'Dataset' not in metadata['json-ld'][0]['@type']:
-        raise TypeError('No valid SOSO JSON-LD available')
-
-    s.close()
-    del s
-    # Beware, this may fail if invalid soso
-    return metadata['json-ld'][0]
+#def extract_metadata(url, delayedloading):
+#    """
+#    Extract metadata from webpage. Using requests_html since NSF ADC is using Javascript to render pages...
+#    """
+#
+#    # Use requests_html
+#    #print('>>>>>', url)
+#    s = HTMLSession()
+#    try:
+#        resp = s.get(url)
+#    except Exception as e:
+#        print(resp)
+#        return(None)
+#
+#    # wait is before and sleep is after render is done
+#    # Make this configurable depending on source
+#    waitingtime = 0
+#    sleeptime = 0
+#    if delayedloading:
+#        print('Prepared for NSF ADC scraping with delayed loading of pages.')
+#        waitingtime = 15
+#        sleeptime = 10
+#
+#    resp.html.render(wait=waitingtime, sleep=sleeptime)
+#    #print(resp.html.render(wait=15, sleep=3))
+#
+#    # Extract information from HTML
+#    metadata = extruct.extract(resp.html.html, base_url=url)
+#    #metadata_box = extruct.extract("https://data.g-e-m.dk/Datasets?doi=10.17897/KBN7-WP73")
+#    del resp
+#
+#    #print(metadata)
+#    if len(metadata['json-ld']) == 0 or 'Dataset' not in metadata['json-ld'][0]['@type']:
+#        raise TypeError('No valid SOSO JSON-LD available')
+#
+#    s.close()
+#    del s
+#    # Beware, this may fail if invalid soso
+#    return metadata['json-ld'][0]
 
 def pangaeaapicall(url):
     """
@@ -215,7 +215,8 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
                     if 'doi.pangaea.de' in url2read:
                         sosomd = pangaeaapicall(url2read)
                     else:
-                        sosomd = extract_metadata(url2read, delayedloading)
+                        #sosomd = extract_metadata(url2read, delayedloading)
+                        print('Skip for now')
                 except Exception as e:
                     print('Error returned: ',e)
                     continue
@@ -380,82 +381,75 @@ def sosomd2mmd(sosomd):
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'last_metadata_update'))
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
     myel3 = ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime'))
+
     customnote = False
     if 'datePublished' in sosomd:
-        tmpdatetime = sosomd['datePublished']
-        date_str = r'^\d{4}-\d{2}-\d{2}$'
-        year_str = r'^\d{4}$'
-        if re.match(date_str, tmpdatetime):
-            tmpdatetime +='T12:00:00Z'
-        elif re.match(year_str, tmpdatetime):
-            tmpdatetime += '-01-01T12:00:00Z'
-            customnote = True
-        myel3.text = tmpdatetime
-    else:
-        print('datePublished not found in record, leaving empty...')
+        tmpdatetime = datetimeconvert(sosomd['datePublished'], True)
+        if tmpdatetime:
+            validdate = tmpdatetime['datetime']
+            myel3.text = validdate
+            customnote = tmpdatetime['note']
+        else:
+            print("Could not convert datePublished", sosomd['datePublished'])
+
     ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Created'
     if customnote is True:
         ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record - Only year is known from source'
     else:
         ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
+
+
     if 'dateModified' in sosomd:
-        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
-        ET.SubElement(myel2,
-                ET.QName(ns_map['mmd'],'datetime')).text = sosomd['dateModified']
-        #we do not know what has been modified. Set to Major modification
-        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Major modification'
-        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
+        tmpdatetime = datetimeconvert(sosomd['dateModified'], True)
+        #print(tmpdatetime)
+        if tmpdatetime:
+            validdate = tmpdatetime['datetime']
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
+            ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime')).text = validdate
+            #we do not know what has been modified. Set to Major modification
+            ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Major modification'
+            ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
+        else:
+            print("Could not convert dateModified", sosomd['dateModified'])
+
 
     # Get temporal extent, if not present dataset is not handled
     # FIXME need to reformat strings to match mmd
     # Double check, could be that this is instantaneous dataset and not ongoing
     # gem is using " - " instead of "/" as separator and it can have empty string
     if 'temporalCoverage' in sosomd and sosomd['temporalCoverage']:
-        date_str = r'^\d{4}-\d{2}-\d{2}$'
-        year_str = r'^\d{4}$'
-
         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'temporal_extent'))
         myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'start_date'))
 
+        #make [start, end] list
         if '/' in sosomd['temporalCoverage']:
             tempcov = sosomd['temporalCoverage'].split('/')
-            for i,t in enumerate(tempcov):
-                parsedt = parse(t)
-                if not parsedt.tzinfo:
-                    tempcov[i] += 'Z'
-                elif parsedt.tzinfo:
-                    continue
-                else:
-                    print('temporal range is not Not a datetime')
-            myel2.text = tempcov[0]
-            if tempcov[1] and tempcov[1] != '..':
-                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
-                myel2.text = tempcov[1]
         elif ' - ' in sosomd['temporalCoverage']:
             tempcov = sosomd['temporalCoverage'].split(' - ')
-            for i,t in enumerate(tempcov):
-                parsedt = parse(t)
-                if not parsedt.tzinfo:
-                    if re.match(date_str, t):
-                        tempcov[i] +='T12:00:00Z'
-                elif parsedt.tzinfo:
-                    continue
-                else:
-                    print('temporal range is not Not a datetime')
-            myel2.text = tempcov[0]
-            if tempcov[1] and tempcov[1] != '..':
-                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
-                myel2.text = tempcov[1]
         else:
-            tempcov = sosomd['temporalCoverage']
-            parsedt = parse(tempcov)
-            if not parsedt.tzinfo:
-                tempcov +='Z'
-            else:
-                print('temporal range is not Not a datetime')
-            myel2.text = tempcov
+            #single date means start=end
+            tempcov = [sosomd['temporalCoverage'], sosomd['temporalCoverage']]
+
+        for i, t in enumerate(tempcov):
+            if t != '..':
+                #check valid datetime
+                val = datetimeconvert(t, False)
+                if val:
+                    tempcov[i] = val['datetime']
+                else:
+                    print('Cannot parse datetime: skipping record')
+                    return None
+
+        if tempcov[0]:
+            #print('start', tempcov[0])
+            myel2.text = tempcov[0]
+        else:
+            print("Cannot parse temporal coverage, skipping")
+        if tempcov[1] and tempcov[1] != '..':
+            #print('end', tempcov[1])
             myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'end_date'))
-            myel2.text = tempcov
+            myel2.text = tempcov[1]
+
     else:
         print('No temporal specification for dataset, skipping record...')
         return(None)
@@ -805,6 +799,38 @@ def sosomd2mmd(sosomd):
     del mykeys
     del myel
     return myroot
+
+def datetimeconvert(temporalinput, pubtype):
+    # try to get a consistent datetime element from datePublished, dateModified and temporalCoverage.
+    # it supports reading of:
+    # year    = '%Y' -> adding default 01-01T12:00:00Z
+    # date    = '%Y-%m-%d'-> adding default T12:00:00Z
+    # datetime  = '%Y-%m-%dT%H:%M:%S' -> adding Z
+    # datetimem = '%Y-%m-%dT%H:%M:%S.%f'-> adding Z
+    # datetimez  = '%Y-%m-%dT%H:%M:%SZ' -> keeping as is
+    # datetimemz = '%Y-%m-%dT%H:%M:%S.%fZ' -> trimming milliseconds and add Z
+    # datetimeaw = '%Y-%m-%dT%H:%M:%S.%Z' -> converting to UTC and add Z
+    # and returns '%Y-%m-%dT%H:%M:%SZ'
+    # additionally, for publication types it returns a customnote boolean
+    try:
+        dtdef = parse(temporalinput, default=datetime(1000, 1, 1, 12, 0, tzinfo=timezone.utc))
+        dtutc = dtdef.astimezone(timezone.utc) # transforms to UTC if string has other zone offset
+        dtutcs = dtutc.isoformat(timespec="seconds") # trimming to seconds
+        dtutcsz = dtutcs.replace("+00:00", "Z") # replace UTC with Z
+    except:
+        print("Could not parse temporal input")
+        return None
+
+    if pubtype:
+        if re.match(r'^\d{4}$', temporalinput):
+            customnote = True
+        else:
+            customnote = False
+        vdatetime = {'datetime': dtutcsz, 'note': customnote}
+    else:
+        vdatetime = {'datetime': dtutcsz}
+
+    return vdatetime
 
 """
 Main program below - only for testing, to be integrated in harvester
