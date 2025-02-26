@@ -229,7 +229,7 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
                 continue
             # Dump MMD file
             #output_file = 'mytestfile.xml' # while testing...
-            #PANGAEA does not always have identifiers. Sometimes it uses url
+            #PANGAEA does not always have identifiers. If only url is present, data is under review. Record should be skipped.
             #print('sosomd')
             if 'identifier' in sosomd:
                 if isinstance(sosomd['identifier'],str):
@@ -250,10 +250,10 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
                         print('identifier cannot be paresed')
                         continue
             elif 'url' in sosomd:
-                if 'doi.pangaea.de/' in sosomd['url']:
+                if 'doi.pangaea.de/' not in sosomd['url']:
                    tmpname = sosomd['url'].split('/')[-1]
                 else:
-                    print('Record does not have identifier or url and is skipped...')
+                    print('Pangaea record does not have identifier, only url and it is skipped...')
                     continue
             else:
                 print('Record does not have identifier or url and is skipped...')
@@ -338,8 +338,11 @@ def sosomd2mmd(sosomd):
         #print('url',myel.text)
         if 'PDCSearch' in sosomd['url']:
             myel.text = "PDC-"+sosomd['url'].split("=",1)[1]
+        #do not fetch doi from urls in pangaea. They might not be persistent
         elif 'doi.pangaea.de/' in sosomd['url']:
-            myel.text = 'doi:' + sosomd['url'].split('doi.pangaea.de/')[-1]
+        #   myel.text = 'doi:' + sosomd['url'].split('doi.pangaea.de/')[-1]
+            print("Pangaea dataset under review. Only url present. Skipping for now.")
+            return None
         else:
             print('Cannot retrieve identifier...')
             return None
@@ -382,30 +385,23 @@ def sosomd2mmd(sosomd):
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
     myel3 = ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime'))
 
-    customnote = False
     if 'datePublished' in sosomd:
-        tmpdatetime = datetimeconvert(sosomd['datePublished'], True)
+        tmpdatetime = datetimeconvert(sosomd['datePublished'])
         if tmpdatetime:
-            validdate = tmpdatetime['datetime']
-            myel3.text = validdate
-            customnote = tmpdatetime['note']
+            myel3.text = tmpdatetime
         else:
             print("Could not convert datePublished", sosomd['datePublished'])
 
     ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Created'
-    if customnote is True:
-        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record - Only year is known from source'
-    else:
-        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
+    ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
 
 
     if 'dateModified' in sosomd:
-        tmpdatetime = datetimeconvert(sosomd['dateModified'], True)
+        tmpdatetime = datetimeconvert(sosomd['dateModified'])
         #print(tmpdatetime)
         if tmpdatetime:
-            validdate = tmpdatetime['datetime']
             myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
-            ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime')).text = validdate
+            ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime')).text = tmpdatetime
             #we do not know what has been modified. Set to Major modification
             ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Major modification'
             ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
@@ -433,9 +429,9 @@ def sosomd2mmd(sosomd):
         for i, t in enumerate(tempcov):
             if t != '..':
                 #check valid datetime
-                val = datetimeconvert(t, False)
+                val = datetimeconvert(t)
                 if val:
-                    tempcov[i] = val['datetime']
+                    tempcov[i] = val
                 else:
                     print('Cannot parse datetime: skipping record')
                     return None
@@ -693,29 +689,30 @@ def sosomd2mmd(sosomd):
 
 
     # Get project. Sometimes it is a list of dicts, othertimes it's a dict
-    if 'funding' in mykeys:
-        if isinstance(sosomd['funding'],list):
-            for i in sosomd['funding']:
-                if  i['@type'] == 'MonetaryGrant':
-                    if 'name' in i:
-                        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
-                        myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
-                        if 'alternateName' in  i.keys():
-                            myel1.text = i['alternateName']
-                        else:
-                            myel1.text = i['name']
-                        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
-                        myel2.text = i['name']
-        else:
-            if  sosomd['funding']['@type'] == 'MonetaryGrant' and 'name' in sosomd['funding']:
-                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
-                myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
-                if 'alternateName' in  sosomd['funding'].keys():
-                    myel1.text = sosomd['funding']['alternateName']
-                else:
-                    myel1.text = sosomd['funding']['name']
-                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
-                myel2.text = sosomd['funding']['name']
+    # Skipping for now. There is no confirmed match between project and funding.
+    #if 'funding' in mykeys:
+    #    if isinstance(sosomd['funding'],list):
+    #        for i in sosomd['funding']:
+    #            if  i['@type'] == 'MonetaryGrant':
+    #                if 'name' in i:
+    #                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
+    #                    myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
+    #                    if 'alternateName' in  i.keys():
+    #                        myel1.text = i['alternateName']
+    #                    else:
+    #                        myel1.text = i['name']
+    #                    myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
+    #                    myel2.text = i['name']
+    #    else:
+    #        if  sosomd['funding']['@type'] == 'MonetaryGrant' and 'name' in sosomd['funding']:
+    #            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
+    #            myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
+    #            if 'alternateName' in  sosomd['funding'].keys():
+    #                myel1.text = sosomd['funding']['alternateName']
+    #            else:
+    #                myel1.text = sosomd['funding']['name']
+    #            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
+    #            myel2.text = sosomd['funding']['name']
 
 
     # Get license
@@ -770,15 +767,23 @@ def sosomd2mmd(sosomd):
 
     # Get parent/child information
     if 'isPartOf' in mykeys:
-        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_dataset'))
-        #parse from url
-        if 'doi.pangaea.de/' in sosomd['isPartOf']:
-            myel.text = 'doi:' + sosomd['isPartOf'].split('doi.pangaea.de/')[-1]
-        elif 'doi.org/' in sosomd['isPartOf']:
-            myel.text = 'doi:' + sosomd['isPartOf'].split('doi.org/')[-1]
+        parentavailable = True
+        #parse from url. Skip for now, DOIs are not persistent for data under review
+        #if 'doi.pangaea.de/' in sosomd['isPartOf']:
+        #    myel.text = 'doi:' + sosomd['isPartOf'].split('doi.pangaea.de/')[-1]
+        if 'doi.org/' in sosomd['isPartOf']:
+            parentid = 'doi:' + sosomd['isPartOf'].split('doi.org/')[-1]
         else:
-            myel.text = sosomd['isPartOf']
-        myel.set('relation_type','parent')
+            if 'doi.pangaea.de/' in sosomd['isPartOf']:
+                parentavailable = False
+                print("Pangaea parent dataset under review. Cannot link to parent: DOI is not persistent. Keep standalone record")
+            else:
+                parentid = sosomd['isPartOf']
+
+        if parentavailable:
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_dataset'))
+            myel.set('relation_type','parent')
+            myel.text = parentid
 
     #data citation DOI
     if 'identifier' in mykeys:
@@ -800,10 +805,10 @@ def sosomd2mmd(sosomd):
     del myel
     return myroot
 
-def datetimeconvert(temporalinput, pubtype):
+def datetimeconvert(temporalinput):
     # try to get a consistent datetime element from datePublished, dateModified and temporalCoverage.
     # it supports reading of:
-    # year    = '%Y' -> adding default 01-01T12:00:00Z
+    # year    = '%Y' -> skip
     # date    = '%Y-%m-%d'-> adding default T12:00:00Z
     # datetime  = '%Y-%m-%dT%H:%M:%S' -> adding Z
     # datetimem = '%Y-%m-%dT%H:%M:%S.%f'-> adding Z
@@ -812,23 +817,19 @@ def datetimeconvert(temporalinput, pubtype):
     # datetimeaw = '%Y-%m-%dT%H:%M:%S.%Z' -> converting to UTC and add Z
     # and returns '%Y-%m-%dT%H:%M:%SZ'
     # additionally, for publication types it returns a customnote boolean
-    try:
-        dtdef = parse(temporalinput, default=datetime(1000, 1, 1, 12, 0, tzinfo=timezone.utc))
-        dtutc = dtdef.astimezone(timezone.utc) # transforms to UTC if string has other zone offset
-        dtutcs = dtutc.isoformat(timespec="seconds") # trimming to seconds
-        dtutcsz = dtutcs.replace("+00:00", "Z") # replace UTC with Z
-    except:
+
+    if re.match(r'^\d{4}$', temporalinput):
         print("Could not parse temporal input")
         return None
-
-    if pubtype:
-        if re.match(r'^\d{4}$', temporalinput):
-            customnote = True
-        else:
-            customnote = False
-        vdatetime = {'datetime': dtutcsz, 'note': customnote}
     else:
-        vdatetime = {'datetime': dtutcsz}
+        try:
+            dtdef = parse(temporalinput, default=datetime(1000, 1, 1, 12, 0, tzinfo=timezone.utc))
+            dtutc = dtdef.astimezone(timezone.utc) # transforms to UTC if string has other zone offset
+            dtutcs = dtutc.isoformat(timespec="seconds") # trimming to seconds
+            vdatetime = dtutcs.replace("+00:00", "Z") # replace UTC with Z
+        except:
+            print("Could not parse temporal input")
+            return None
 
     return vdatetime
 
