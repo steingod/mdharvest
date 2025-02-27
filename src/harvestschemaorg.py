@@ -385,29 +385,41 @@ def sosomd2mmd(sosomd):
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
     myel3 = ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime'))
 
+    # TODO - handle datetime when datePublished is not provided. This is a mandatory field in mmd, not it will just be
+    # empty, i.e. not compliant.
+    customnote = False
     if 'datePublished' in sosomd:
-        tmpdatetime = datetimeconvert(sosomd['datePublished'])
+        tmpdatetime = datetimeconvert(sosomd['datePublished'], True)
         if tmpdatetime:
-            myel3.text = tmpdatetime
+            validdate = tmpdatetime['datetime']
+            myel3.text = validdate
+            customnote = tmpdatetime['note']
         else:
             print("Could not convert datePublished", sosomd['datePublished'])
 
     ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Created'
-    ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
-
+    if customnote is True:
+        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record - Only year is known from source'
+    else:
+        ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
 
     if 'dateModified' in sosomd:
-        tmpdatetime = datetimeconvert(sosomd['dateModified'])
+        customnote = False
+        tmpdatetime = datetimeconvert(sosomd['dateModified'], True)
         #print(tmpdatetime)
         if tmpdatetime:
+            validdate = tmpdatetime['datetime']
+            customnote = tmpdatetime['note']
             myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'update'))
-            ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime')).text = tmpdatetime
+            ET.SubElement(myel2, ET.QName(ns_map['mmd'],'datetime')).text = validdate
             #we do not know what has been modified. Set to Major modification
             ET.SubElement(myel2,ET.QName(ns_map['mmd'],'type')).text = 'Major modification'
-            ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
+            if customnote is True:
+                ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record - Only year is known from source'
+            else:
+                ET.SubElement(myel2,ET.QName(ns_map['mmd'],'note')).text = 'From original metadata record'
         else:
             print("Could not convert dateModified", sosomd['dateModified'])
-
 
     # Get temporal extent, if not present dataset is not handled
     # FIXME need to reformat strings to match mmd
@@ -429,9 +441,9 @@ def sosomd2mmd(sosomd):
         for i, t in enumerate(tempcov):
             if t != '..':
                 #check valid datetime
-                val = datetimeconvert(t)
+                val = datetimeconvert(t, False)
                 if val:
-                    tempcov[i] = val
+                    tempcov[i] = val['datetime']
                 else:
                     print('Cannot parse datetime: skipping record')
                     return None
@@ -805,10 +817,10 @@ def sosomd2mmd(sosomd):
     del myel
     return myroot
 
-def datetimeconvert(temporalinput):
+def datetimeconvert(temporalinput, pubtype):
     # try to get a consistent datetime element from datePublished, dateModified and temporalCoverage.
     # it supports reading of:
-    # year    = '%Y' -> skip
+    # year    = '%Y' -> adding default 01-01T12:00:00Z
     # date    = '%Y-%m-%d'-> adding default T12:00:00Z
     # datetime  = '%Y-%m-%dT%H:%M:%S' -> adding Z
     # datetimem = '%Y-%m-%dT%H:%M:%S.%f'-> adding Z
@@ -817,19 +829,23 @@ def datetimeconvert(temporalinput):
     # datetimeaw = '%Y-%m-%dT%H:%M:%S.%Z' -> converting to UTC and add Z
     # and returns '%Y-%m-%dT%H:%M:%SZ'
     # additionally, for publication types it returns a customnote boolean
-
-    if re.match(r'^\d{4}$', temporalinput):
+    try:
+        dtdef = parse(temporalinput, default=datetime(1000, 1, 1, 12, 0, tzinfo=timezone.utc))
+        dtutc = dtdef.astimezone(timezone.utc) # transforms to UTC if string has other zone offset
+        dtutcs = dtutc.isoformat(timespec="seconds") # trimming to seconds
+        dtutcsz = dtutcs.replace("+00:00", "Z") # replace UTC with Z
+    except:
         print("Could not parse temporal input")
         return None
+
+    if pubtype:
+        if re.match(r'^\d{4}$', temporalinput):
+            customnote = True
+        else:
+            customnote = False
+        vdatetime = {'datetime': dtutcsz, 'note': customnote}
     else:
-        try:
-            dtdef = parse(temporalinput, default=datetime(1000, 1, 1, 12, 0, tzinfo=timezone.utc))
-            dtutc = dtdef.astimezone(timezone.utc) # transforms to UTC if string has other zone offset
-            dtutcs = dtutc.isoformat(timespec="seconds") # trimming to seconds
-            vdatetime = dtutcs.replace("+00:00", "Z") # replace UTC with Z
-        except:
-            print("Could not parse temporal input")
-            return None
+        vdatetime = {'datetime': dtutcsz}
 
     return vdatetime
 
