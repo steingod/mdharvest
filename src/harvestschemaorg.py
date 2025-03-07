@@ -484,8 +484,7 @@ def sosomd2mmd(sosomd):
     if 'keywords' in mykeys:
         keywords = True
         if isinstance(sosomd['keywords'],str):
-            sosomd['keywords'].replace(';', ',')
-            mykws = sosomd['keywords'].split(',')
+            mykws = sosomd['keywords'].replace(';', ',').split(',')
         elif isinstance(sosomd['keywords'],list) and len(sosomd['keywords']) > 0:
             mykws = sosomd['keywords']
         else:
