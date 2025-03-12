@@ -28,7 +28,7 @@ import time
 import lxml.etree as ET
 import urllib.request as ul
 #from requests_html import HTMLSession
-from w3lib.html import get_base_url
+#from w3lib.html import get_base_url
 from urllib.parse import urlparse
 import json
 from bs4 import BeautifulSoup as bs
@@ -223,7 +223,10 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
             else:
                 # for gem we can directly get the schema.org info in the form of dict
                 sosomd = el
-            mmd = sosomd2mmd(sosomd)
+            if sosomd != None:
+                mmd = sosomd2mmd(sosomd)
+            else:
+                continue
             if mmd == None:
                 print('Record is not complete and is skipped...')
                 continue
