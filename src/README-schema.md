@@ -2,7 +2,7 @@
 
 ## End points to test
     - https://arcticdata.io/metacat/sitemaps/sitemap1.xml (NSF/ADC)
-    - https://data.g-e-m.dk/sitemap (GEM)
+    - https://api.g-e-m.dk/api/dataset/harvest (GEM)
     - http://hedeby.uwaterloo.ca/api/ (PDC)
     - http://hedeby.uwaterloo.ca/aggregator/ (CCADI)
     - https://doi.pangaea.de/sitemap.xml (multiple levels)
