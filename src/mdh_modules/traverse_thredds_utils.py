@@ -275,7 +275,9 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
             mynode.text = 'Not available'
             myroot.insert(-1, mynode)
 
-        # Add related_information
+        # Add related_information landing page. All records with no.met.adc prefix in the
+        # metadata indetifier will have landing pages of type https://adc.met.no/dataset/id
+        metadata_identifier = myxml.find("./mmd:metadata_identifier", myroot.nsmap).text
         related_information = ET.Element(
                 "{http://www.met.no/schema/mmd}related_information")
         related_information_type = ET.SubElement(related_information,
@@ -284,6 +286,23 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         related_information_description = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}description')
         related_information_description.text = 'Dataset landing page'
+        related_information_resource = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}resource')
+        if 'no.met.adc' in metadata_identifier:
+            related_information_resource.text = 'https://adc.met.no/dataset/' + metadata_identifier.split('no.met.adc:')[-1]
+        else:
+            related_information_resource.text = ds.url.replace('.xml','.html')
+        myroot.insert(-1,related_information)
+
+        # also add related_information Data server landing page
+        related_information = ET.Element(
+                '{http://www.met.no/schema/mmd}related_information')
+        related_information_type = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}type')
+        related_information_type.text = 'Data server landing page'
+        related_information_description = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}description')
+        related_information_description.text = 'Access to THREDDS catalogue landing page'
         related_information_resource = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}resource')
         related_information_resource.text = ds.url.replace('.xml','.html')
