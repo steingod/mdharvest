@@ -302,7 +302,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         related_information_type.text = 'Data server landing page'
         related_information_description = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}description')
-        related_information_description.text = 'Access to THREDDS catalogue landing page'
+        related_information_description.text = 'Access to the data server landing page'
         related_information_resource = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}resource')
         related_information_resource.text = ds.url.replace('.xml','.html')
