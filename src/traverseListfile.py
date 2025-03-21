@@ -152,6 +152,7 @@ def modifyMMD(myxml, checkId=False, collections=None, thredds=False):
 #        mynode.text = 'Not available'
 
     if thredds:
+        metadata_identifier = myxml.find("./mmd:metadata_identifier", namespaces=myroot.nsmap)
         # Add related_information
         related_information = ET.Element(
                 "{http://www.met.no/schema/mmd}related_information")
@@ -163,7 +164,24 @@ def modifyMMD(myxml, checkId=False, collections=None, thredds=False):
         related_information_description.text = 'Dataset landing page'
         related_information_resource = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}resource')
-        related_information_resource.text = ds.url.replace('xml','html')
+        if metadata_identifier is not None and 'no.met.adc' in metadata_identifier:
+            related_information_resource.text = 'https://adc.met.no/dataset/' + metadata_identifier.split('no.met.adc:')[-1]
+        else:
+            related_information_resource.text = ds.url.replace('.xml','.html')
+        myroot.insert(-1,related_information)
+
+        # also add related_information Data server landing page
+        related_information = ET.Element(
+                '{http://www.met.no/schema/mmd}related_information')
+        related_information_type = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}type')
+        related_information_type.text = 'Data server landing page'
+        related_information_description = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}description')
+        related_information_description.text = 'Access to the data server landing page'
+        related_information_resource = ET.SubElement(related_information,
+                '{http://www.met.no/schema/mmd}resource')
+        related_information_resource.text = ds.url.replace('.xml','.html')
         myroot.insert(-1,related_information)
 
         # Add data_access (not done automatically)
