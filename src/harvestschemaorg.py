@@ -77,6 +77,15 @@ import re
 #    # Beware, this may fail if invalid soso
 #    return metadata['json-ld'][0]
 
+def check_directories(mydir):
+    if not os.path.isdir(mydir):
+        try:
+            os.makedirs(mydir)
+        except:
+            print("Could not create output directory")
+            return(2)
+    return(0)
+
 def pangaeaapicall(url):
     """
     Designed for PANGAEA. This is the fastest solution. All jsonld records are available at the url+?format=metadata_jsonld
@@ -382,6 +391,8 @@ def sosomd2mmd(sosomd):
     # Set collection - TODO remove after testing
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
     myel.text = 'ADC'
+    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+    myel.text = 'NSDN'
 
     # Get metadata update
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'last_metadata_update'))
@@ -484,15 +495,18 @@ def sosomd2mmd(sosomd):
     #  "termCode": "91697b7d-8f2b-4954-850e-61d5f61c867d" (optional)
     # },...
     # It is also provided as empty list
+    keywords = False
     if 'keywords' in mykeys:
-        keywords = True
+        gcwcoll = False
+        gcwpar = ["CRYOSPHERE", "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE", "OCEANS &gt; SEA ICE"]
         if isinstance(sosomd['keywords'],str):
             mykws = sosomd['keywords'].replace(';', ',').split(',')
+            keywords = True
         elif isinstance(sosomd['keywords'],list) and len(sosomd['keywords']) > 0:
             mykws = sosomd['keywords']
+            keywords = True
         else:
             print('Cannot parse keywords element')
-            keywords = False
         if keywords:
             for kw in mykws:
                 if isinstance(kw,str):
@@ -517,6 +531,8 @@ def sosomd2mmd(sosomd):
                             myel.set('vocabulary','None')
                         myelnone = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
                         myelnone.text = kw.strip()
+                    if kw.upper() in gcwpar:
+                        gcwcoll = True
                 elif isinstance(kw,dict):
                     if kw['@type'] == 'DefinedTerm':
                         if 'sciencekeywords' in kw['inDefinedTermSet']:
@@ -531,52 +547,72 @@ def sosomd2mmd(sosomd):
                                 myel.set('vocabulary','CFSTDN')
                             myelcfstdn = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
                             myelcfstdn.text = kw['name']
+                        if kw['name'].upper() in gcwpar:
+                            gcwcoll = True
         else:
             print('Keywords found, but empty')
+
+        if gcwcoll:
+            mycoll = myroot.find("mmd:collection",myroot.nsmap)
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+            myel.text = 'GCW'
+            mycoll.addnext(myel)
 
 
     # Extract variable information
     # FIXME check ontology references later
     # Need to be expanded
     # schema.org allows the value of variableMeasured to be a simple text string, but SOSO strongly recommends to use the schema:PropertyValue type
+    varmeas = False
     if 'variableMeasured' in mykeys:
-        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
-        myel.set('vocabulary','None')
-        if isinstance(sosomd['variableMeasured'],list):
-            if len(sosomd['variableMeasured']) >0:
-                for el in sosomd['variableMeasured']:
-                    if isinstance(el, dict):
-                        myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                        myelkw.text = el['name']
-                        #it is possible to extract other vocabularies. Check for CF
-                        #if 'subjectOf' in el:
-                        #    if isinstance(el['subjectOf']['hasDefinedTerm'],list):
-                        #        for i in el['subjectOf']['hasDefinedTerm']:
-                        #            if isinstance(i,dict) and 'url' in i.keys() or 'url' in i:
-                        #                if 'vocab.nerc.ac.uk/collection/P07/' in i['url']:
-                        #                    print('standard name')
-                        #    else:
-                        #        if isinstance(el['subjectOf']['hasDefinedTerm'],dict) and 'url' in el['subjectOf']['hasDefinedTerm'].keys() or 'url' in el['subjectOf']['hasDefinedTerm']:
-                        #            if 'vocab.nerc.ac.uk/collection/P07/' in el['subjectOf']['hasDefinedTerm']['url']:
-                        #                print('standard name')
-                    else:
-                        myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                        myelkw.text = el
+        if isinstance(sosomd['variableMeasured'],str):
+            varmeas = True
+        elif isinstance(sosomd['variableMeasured'],list) and len(sosomd['variableMeasured']) > 0:
+            varmeas = True
+        else:
+            print('Cannot parse variableMeasured element')
+
+        if varmeas:
+            if isinstance(sosomd['variableMeasured'],list):
+               myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+               myel.set('vocabulary','None')
+               for el in sosomd['variableMeasured']:
+                   if isinstance(el, dict):
+                       myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                       myelkw.text = el['name']
+                       #it is possible to extract other vocabularies. Check for CF
+                       #if 'subjectOf' in el:
+                       #    if isinstance(el['subjectOf']['hasDefinedTerm'],list):
+                       #        for i in el['subjectOf']['hasDefinedTerm']:
+                       #            if isinstance(i,dict) and 'url' in i.keys() or 'url' in i:
+                       #                if 'vocab.nerc.ac.uk/collection/P07/' in i['url']:
+                       #                    print('standard name')
+                       #    else:
+                       #        if isinstance(el['subjectOf']['hasDefinedTerm'],dict) and 'url' in el['subjectOf']['hasDefinedTerm'].keys() or 'url' in el['subjectOf']['hasDefinedTerm']:
+                       #            if 'vocab.nerc.ac.uk/collection/P07/' in el['subjectOf']['hasDefinedTerm']['url']:
+                       #                print('standard name')
+                   else:
+                       myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                       myelkw.text = el
             else:
                 myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                myelkw.text = ''
-        else:
-            myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-            myelkw.text = sosomd['variableMeasured']['name']
+                myelkw.text = sosomd['variableMeasured']['name']
 
 
     #test for PANGAEA to add keywords from title
-    if ('keywords' not in mykeys or not keywords) and 'variableMeasured' not in mykeys:
+    if ('keywords' not in mykeys or not keywords) and ('variableMeasured' not in mykeys or not varmeas):
         if 'Documentation of sediment core' in sosomd['name']:
             myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
             myel.set('vocabulary','GCMDSK')
             myelgcmd = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
             myelgcmd.text = 'EARTH SCIENCE > PALEOCLIMATE > OCEAN/LAKE RECORDS > SEDIMENT CORE'
+        #extraction for gem could be attempted, but is it not consitent
+        #elif 'alternateName' in sosomd.keys() and 'data.g-e-m.dk' in sosomd['url']:
+        #    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+        #    myel.set('vocabulary','None')
+        #    an = sosomd['alternateName'].split(' - ')[0]
+        #    myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+        #    myel2.text = an
         else:
             #leave empty keywords - it is mandatory in mmd but still it will not be indexed if empty
             myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
@@ -616,12 +652,16 @@ def sosomd2mmd(sosomd):
 
             myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'north'))
             myel3.text = geobox[2]
+            north = float(myel3.text)
             myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'south'))
             myel3.text =  geobox[0]
+            south = float(myel3.text)
             myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'west'))
             myel3.text =  geobox[1].rstrip(',')
+            west = float(myel3.text)
             myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'east'))
             myel3.text =  geobox[3].rstrip(',')
+            east = float(myel3.text)
         else:
             # Handle point from PANGEA, could be more thatdoes like this...
             # FIXME check that no bounding boxes are presented this way
@@ -631,15 +671,43 @@ def sosomd2mmd(sosomd):
                 myel2.set('srsName','EPSG:4326')
                 myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'north'))
                 myel3.text = str(sosomd['spatialCoverage']['geo']['latitude'])
+                north = float(myel3.text)
                 myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'south'))
                 myel3.text =  str(sosomd['spatialCoverage']['geo']['latitude'])
+                south = float(myel3.text)
                 myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'west'))
                 myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
+                west = float(myel3.text)
                 myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'east'))
                 myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
+                east = float(myel3.text)
             else:
                 print('Only supporting bounding boxes for now, skipping record')
                 return(None)
+        #add SIOS collection
+        siosbbox = [90.,40.,70.,-20.]
+        thisbb = [north,east,south,west]
+        sios = False
+        if (thisbb[0] < siosbbox[0]) and (thisbb[1] < siosbbox[1]) and (thisbb[0] > siosbbox[2]) and (thisbb[1] > siosbbox[3])\
+            or (thisbb[2] > siosbbox[2]) and (thisbb[1] < siosbbox[1]) and (thisbb[2] < siosbbox[0]) and (thisbb[1] > siosbbox[3])\
+                or (thisbb[2] > siosbbox[2]) and (thisbb[3] > siosbbox[3]) and (thisbb[2] < siosbbox[0]) and (thisbb[3] < siosbbox[1])\
+                    or (thisbb[0] < siosbbox[0]) and (thisbb[3] > siosbbox[3]) and (thisbb[0] > siosbbox[2]) and (thisbb[3] < siosbbox[1]):
+            sios = True
+        elif (thisbb[0] > siosbbox[0]) and (thisbb[1] > siosbbox[1]) and (thisbb[2] < siosbbox[2]) and (thisbb[3] < siosbbox[3]):
+            sios = True
+        elif (thisbb[0] > siosbbox[0]) and (thisbb[2] < siosbbox[0]) and (thisbb[1] > siosbbox[1]) and (thisbb[3] < siosbbox[3])\
+            or (thisbb[0] > siosbbox[0]) and (thisbb[2] < siosbbox[2]) and (thisbb[1] > siosbbox[1]) and (thisbb[3] < siosbbox[1])\
+                or (thisbb[0] > siosbbox[2]) and (thisbb[3] < siosbbox[3]) and (thisbb[1] > siosbbox[1]) and (thisbb[3] < siosbbox[3])\
+                    or (thisbb[0] > siosbbox[0]) and (thisbb[2] < siosbbox[2]) and (thisbb[1] > siosbbox[3]) and (thisbb[3] < siosbbox[3]):
+            sios = True
+        else:
+            sios = False
+        if sios:
+            mycoll = myroot.find("mmd:collection",myroot.nsmap)
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+            myel.text = 'SIOS'
+            mycoll.addnext(myel)
+
 
     # related_information, assuming primarily landing pages are conveyed
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_information'))
@@ -666,6 +734,9 @@ def sosomd2mmd(sosomd):
                 else:
                     myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
                     myel3.text = ''
+                if '@type' in el.keys() and el['@type'] == 'Organization':
+                    myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                    myel4.text = el['name']
                 # sosomd['creator'] type og name
         else:
             myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'personnel'))
@@ -679,6 +750,9 @@ def sosomd2mmd(sosomd):
             else:
                 myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
                 myel3.text = ''
+            if '@type' in sosomd['creator'].keys() and sosomd['creator']['@type'] == 'Organization':
+                myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                myel4.text = sosomd['creator']['name']
 
     #test contributors
     if 'contributor' in mykeys:
@@ -873,6 +947,8 @@ if __name__ == '__main__':
     except:
         parser.print_help()
         sys.exit()
+
+    check_directories(args.dstdir)
 
     if args.ccadiapi:
         try:
