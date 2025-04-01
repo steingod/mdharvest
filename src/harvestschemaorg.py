@@ -23,6 +23,7 @@ from dateutil.parser import parse
 import pandas as pd
 #import extruct
 import vocab.ControlledVocabulary
+import vocab.ResearchInfra
 import requests
 import time
 import lxml.etree as ET
@@ -496,9 +497,13 @@ def sosomd2mmd(sosomd):
     # },...
     # It is also provided as empty list
     keywords = False
+    rimapping = vocab.ResearchInfra.RI
+    rilist = []
+    polarincoll = False
     if 'keywords' in mykeys:
         gcwcoll = False
         gcwpar = ["CRYOSPHERE", "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE", "OCEANS &gt; SEA ICE"]
+        approject = False
         if isinstance(sosomd['keywords'],str):
             mykws = sosomd['keywords'].replace(';', ',').split(',')
             keywords = True
@@ -531,8 +536,23 @@ def sosomd2mmd(sosomd):
                             myel.set('vocabulary','None')
                         myelnone = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
                         myelnone.text = kw.strip()
+                    #Attempt Polarin RI mapping
+                    for k,v in rimapping.items():
+                        if kw.strip() in v['kw']:
+                            ri = ET.Element(ET.QName(ns_map['mmd'],'related_information'))
+                            ri2 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'type'))
+                            ri2.text = 'Observation facility'
+                            ri3 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'description'))
+                            ri3.text = k
+                            if v['polarin'] is True:
+                                polarincoll = True
+                            ri4 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'resource'))
+                            ri4.text = v['resource']
+                            rilist.append(ri)
                     if kw.upper() in gcwpar:
                         gcwcoll = True
+                    if kw == 'Arctic PASSION':
+                        approject = True
                 elif isinstance(kw,dict):
                     if kw['@type'] == 'DefinedTerm':
                         if 'sciencekeywords' in kw['inDefinedTermSet']:
@@ -684,6 +704,25 @@ def sosomd2mmd(sosomd):
             else:
                 print('Only supporting bounding boxes for now, skipping record')
                 return(None)
+        #GEM is providing station names within the spatialCoverage
+        if 'name' in sosomd['spatialCoverage']:
+            geoname = sosomd['spatialCoverage']['name']
+            tmpstation = geoname.split()
+            for st in tmpstation:
+                st = st.strip()
+                for k,v in rimapping.items():
+                    if st.strip() in v['kw']:
+                        ri = ET.Element(ET.QName(ns_map['mmd'],'related_information'))
+                        ri2 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'type'))
+                        ri2.text = 'Observation facility'
+                        ri3 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'description'))
+                        ri3.text = k
+                        if v['polarin'] is True:
+                            polarincoll = True
+                        ri4 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'resource'))
+                        ri4.text = v['resource']
+                        rilist.append(ri)
+
         #add SIOS collection
         siosbbox = [90.,40.,70.,-20.]
         thisbb = [north,east,south,west]
@@ -717,6 +756,19 @@ def sosomd2mmd(sosomd):
     myel2.text = "Dataset landing page"
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
     myel2.text = sosomd['url']
+
+    if polarincoll:
+        mycoll = myroot.find("mmd:collection",myroot.nsmap)
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+        myel.text = 'POLARIN'
+        mycoll.addnext(myel)
+
+    #check if RI is available
+    if len(rilist) > 0:
+        #add Observation facilty
+        lp = myroot.find("mmd:related_information/[mmd:type = 'Dataset landing page']",myroot.nsmap)
+        for rimapped in rilist:
+            lp.addnext(rimapped)
 
     # Get personnel involved
     # FIXME not sure how to differentiate roles
@@ -801,7 +853,12 @@ def sosomd2mmd(sosomd):
     #                myel1.text = sosomd['funding']['name']
     #            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
     #            myel2.text = sosomd['funding']['name']
-
+    if keywords and approject:
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
+        myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
+        myel1.text = 'Arctic PASSION'
+        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
+        myel2.text = 'Arctic PASSION'
 
     # Get license
     # FIXME identifier is only tested on PANGAEA so far...
