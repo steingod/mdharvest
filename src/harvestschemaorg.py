@@ -500,9 +500,9 @@ def sosomd2mmd(sosomd):
     rimapping = vocab.ResearchInfra.RI
     rilist = []
     polarincoll = False
+    gcwcoll = False
+    gcwpar = ["CRYOSPHERE", "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE", "OCEANS &gt; SEA ICE", "DEPTH, ICE/SNOW", "PERMAFROST"]
     if 'keywords' in mykeys:
-        gcwcoll = False
-        gcwpar = ["CRYOSPHERE", "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE", "OCEANS &gt; SEA ICE"]
         approject = False
         if isinstance(sosomd['keywords'],str):
             mykws = sosomd['keywords'].replace(';', ',').split(',')
@@ -549,9 +549,9 @@ def sosomd2mmd(sosomd):
                             ri4 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'resource'))
                             ri4.text = v['resource']
                             rilist.append(ri)
-                    if kw.upper() in gcwpar:
+                    if kw.upper().strip() in gcwpar:
                         gcwcoll = True
-                    if kw == 'Arctic PASSION':
+                    if kw.strip() == 'Arctic PASSION':
                         approject = True
                 elif isinstance(kw,dict):
                     if kw['@type'] == 'DefinedTerm':
@@ -572,11 +572,6 @@ def sosomd2mmd(sosomd):
         else:
             print('Keywords found, but empty')
 
-        if gcwcoll:
-            mycoll = myroot.find("mmd:collection",myroot.nsmap)
-            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
-            myel.text = 'GCW'
-            mycoll.addnext(myel)
 
 
     # Extract variable information
@@ -594,29 +589,35 @@ def sosomd2mmd(sosomd):
 
         if varmeas:
             if isinstance(sosomd['variableMeasured'],list):
-               myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
-               myel.set('vocabulary','None')
-               for el in sosomd['variableMeasured']:
-                   if isinstance(el, dict):
-                       myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                       myelkw.text = el['name']
-                       #it is possible to extract other vocabularies. Check for CF
-                       #if 'subjectOf' in el:
-                       #    if isinstance(el['subjectOf']['hasDefinedTerm'],list):
-                       #        for i in el['subjectOf']['hasDefinedTerm']:
-                       #            if isinstance(i,dict) and 'url' in i.keys() or 'url' in i:
-                       #                if 'vocab.nerc.ac.uk/collection/P07/' in i['url']:
-                       #                    print('standard name')
-                       #    else:
-                       #        if isinstance(el['subjectOf']['hasDefinedTerm'],dict) and 'url' in el['subjectOf']['hasDefinedTerm'].keys() or 'url' in el['subjectOf']['hasDefinedTerm']:
-                       #            if 'vocab.nerc.ac.uk/collection/P07/' in el['subjectOf']['hasDefinedTerm']['url']:
-                       #                print('standard name')
-                   else:
-                       myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                       myelkw.text = el
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                myel.set('vocabulary','None')
+                for el in sosomd['variableMeasured']:
+                    if isinstance(el, dict):
+                        myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                        myelkw.text = el['name']
+                        if el['name'].upper() in gcwpar:
+                            gcwcoll = True
+                        #it is possible to extract other vocabularies. Check for CF
+                        #if 'subjectOf' in el:
+                        #    if isinstance(el['subjectOf']['hasDefinedTerm'],list):
+                        #        for i in el['subjectOf']['hasDefinedTerm']:
+                        #            if isinstance(i,dict) and 'url' in i.keys() or 'url' in i:
+                        #                if 'vocab.nerc.ac.uk/collection/P07/' in i['url']:
+                        #                    print('standard name')
+                        #    else:
+                        #        if isinstance(el['subjectOf']['hasDefinedTerm'],dict) and 'url' in el['subjectOf']['hasDefinedTerm'].keys() or 'url' in el['subjectOf']['hasDefinedTerm']:
+                        #            if 'vocab.nerc.ac.uk/collection/P07/' in el['subjectOf']['hasDefinedTerm']['url']:
+                        #                print('standard name')
+                    else:
+                        myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                        myelkw.text = el
+                        if el.upper() in gcwpar:
+                            gcwcoll = True
             else:
                 myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
                 myelkw.text = sosomd['variableMeasured']['name']
+                if sosomd['variableMeasured']['name'].upper() in gcwpar:
+                    gcwcoll = True
 
 
     #test for PANGAEA to add keywords from title
@@ -761,6 +762,12 @@ def sosomd2mmd(sosomd):
         mycoll = myroot.find("mmd:collection",myroot.nsmap)
         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
         myel.text = 'POLARIN'
+        mycoll.addnext(myel)
+
+    if gcwcoll:
+        mycoll = myroot.find("mmd:collection",myroot.nsmap)
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+        myel.text = 'GCW'
         mycoll.addnext(myel)
 
     #check if RI is available
