@@ -499,8 +499,11 @@ def sosomd2mmd(sosomd):
     keywords = False
     rimapping = vocab.ResearchInfra.RI
     rilist = []
+    # parsing of keywords can be used for adding collections. There is no garantee that parent and children have the
+    # same match.
     polarincoll = False
     gcwcoll = False
+    yoppcoll = False
     gcwpar = ["CRYOSPHERE", "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE", "OCEANS &gt; SEA ICE", "DEPTH, ICE/SNOW", "PERMAFROST"]
     if 'keywords' in mykeys:
         approject = False
@@ -553,6 +556,8 @@ def sosomd2mmd(sosomd):
                         gcwcoll = True
                     if kw.strip() == 'Arctic PASSION':
                         approject = True
+                    if kw.strip() == 'YOPP':
+                        yoppcoll = True
                 elif isinstance(kw,dict):
                     if kw['@type'] == 'DefinedTerm':
                         if 'sciencekeywords' in kw['inDefinedTermSet']:
@@ -836,36 +841,44 @@ def sosomd2mmd(sosomd):
 
 
     # Get project. Sometimes it is a list of dicts, othertimes it's a dict
-    # Skipping for now. There is no confirmed match between project and funding.
-    #if 'funding' in mykeys:
-    #    if isinstance(sosomd['funding'],list):
-    #        for i in sosomd['funding']:
-    #            if  i['@type'] == 'MonetaryGrant':
-    #                if 'name' in i:
-    #                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
-    #                    myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
-    #                    if 'alternateName' in  i.keys():
-    #                        myel1.text = i['alternateName']
-    #                    else:
-    #                        myel1.text = i['name']
-    #                    myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
-    #                    myel2.text = i['name']
-    #    else:
-    #        if  sosomd['funding']['@type'] == 'MonetaryGrant' and 'name' in sosomd['funding']:
-    #            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
-    #            myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
-    #            if 'alternateName' in  sosomd['funding'].keys():
-    #                myel1.text = sosomd['funding']['alternateName']
-    #            else:
-    #                myel1.text = sosomd['funding']['name']
-    #            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
-    #            myel2.text = sosomd['funding']['name']
+    # In general is should be skipped as there is no confirmed match between project and funding.
+    # This is used only for selected projects in order to add MMD collections
+    # A separated dictionary could be created and stored in vocab folder to make this more
+    # generic and easy to update.
+    if 'funding' in mykeys:
+        if isinstance(sosomd['funding'],list):
+            for i in sosomd['funding']:
+                if  i['@type'] == 'MonetaryGrant':
+                    if 'identifier' in i:
+                        if i['identifier'] == 'AFMOSAiC-1_00':
+                            yoppcoll = True
+                            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
+                            myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
+                            myel1.text = 'MOSAiC'
+                            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
+                            myel2.text = 'Multidisciplinary drifting Observatory for the Study of Arctic Climate'
+        else:
+            if  sosomd['funding']['@type'] == 'MonetaryGrant' and 'identifier' in sosomd['funding']:
+                if sosomd['funding']['identifier'] == 'AFMOSAiC-1_00':
+                    yoppcoll = True
+                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
+                    myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
+                    myel1.text = 'MOSAiC'
+                    myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
+                    myel2.text = 'Multidisciplinary drifting Observatory for the Study of Arctic Climate'
+
     if keywords and approject:
         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
         myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
         myel1.text = 'Arctic PASSION'
         myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
         myel2.text = 'Arctic PASSION'
+
+    if yoppcoll:
+        mycoll = myroot.find("mmd:collection",myroot.nsmap)
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+        myel.text = 'YOPP'
+        mycoll.addnext(myel)
 
     # Get license
     # FIXME identifier is only tested on PANGAEA so far...
