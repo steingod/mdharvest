@@ -504,9 +504,9 @@ def sosomd2mmd(sosomd):
     polarincoll = False
     gcwcoll = False
     yoppcoll = False
+    approject = False
     gcwpar = ["CRYOSPHERE", "TERRESTRIAL HYDROSPHERE &gt; SNOW/ICE", "OCEANS &gt; SEA ICE", "DEPTH, ICE/SNOW", "PERMAFROST"]
     if 'keywords' in mykeys:
-        approject = False
         if isinstance(sosomd['keywords'],str):
             mykws = sosomd['keywords'].replace(';', ',').split(',')
             keywords = True
@@ -857,6 +857,8 @@ def sosomd2mmd(sosomd):
                             myel1.text = 'MOSAiC'
                             myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
                             myel2.text = 'Multidisciplinary drifting Observatory for the Study of Arctic Climate'
+                        if i['identifier'] == '101003472':
+                            approject = True
         else:
             if  sosomd['funding']['@type'] == 'MonetaryGrant' and 'identifier' in sosomd['funding']:
                 if sosomd['funding']['identifier'] == 'AFMOSAiC-1_00':
@@ -866,13 +868,15 @@ def sosomd2mmd(sosomd):
                     myel1.text = 'MOSAiC'
                     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
                     myel2.text = 'Multidisciplinary drifting Observatory for the Study of Arctic Climate'
+                if sosomd['funding']['identifier'] == '101003472':
+                    approject = True
 
-    if keywords and approject:
+    if approject:
         myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'project'))
         myel1 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'short_name'))
         myel1.text = 'Arctic PASSION'
         myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'long_name'))
-        myel2.text = 'Arctic PASSION'
+        myel2.text = 'Pan-Arctic observing System of Systems: Implementing Observations for societal Needs'
 
     if yoppcoll:
         mycoll = myroot.find("mmd:collection",myroot.nsmap)
