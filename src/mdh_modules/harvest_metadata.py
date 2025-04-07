@@ -144,14 +144,13 @@ class MetadataHarvester(object):
                     # Probably should discuss keyword, rdf is quite wide but is used by several for DCAT...
                     self.oaipmh_writeDCATtoFile(myxml)
                 else:
-                    raise "Metadata format not supported yet."
+                    raise Exception("Metadata format not supported yet.")
             else:
                 self.logger.error("Server is not responding properly: %s", myxml)
                 raise IOError("Server to harvest is not responding properly")
-                return(0)
             pageCounter = 1
             resumptionToken = myxml.find('.//{*}resumptionToken')
-            print('#### ',type(resumptionToken.text))
+            ##print('#### ',type(resumptionToken.text))
             if resumptionToken.text == None or resumptionToken.text == '0':
                 self.logger.info("Nothing more to do")
                 resumptionToken = None
@@ -168,7 +167,10 @@ class MetadataHarvester(object):
                 # create resumptionToken URL parameter
                 #resumptionToken = urlencode({'resumptionToken':resumptionToken})
                 resumptionToken = 'resumptionToken='+resumptionToken
-                if 'geonetwork' in baseURL:
+                # Ideally this should be handled more smooth
+                resumptionTokenSpecialTreatment = ['geonetwork', 'eu-interact']
+                #if 'geonetwork' in baseURL:
+                if any(x in baseURL for x in resumptionTokenSpecialTreatment):
                     getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
                 else:
                     getRecordsURLLoop = str(getRecordsURL+'&'+resumptionToken)
@@ -180,13 +182,16 @@ class MetadataHarvester(object):
                         self.oaipmh_writeDIFtoFile(myxml)
                     elif "iso" in self.srcfmt:
                         self.oaipmh_writeISOtoFile(myxml)
+                    elif "rdf" in self.srcfmt:
+                        self.oaipmh_writeDCATtoFile(myxml)
                     else:
-                        raise "Metadata format not supported yet."
+                        raise Exception("Metadata format not supported yet.")
                 else:
                     self.logger.info("myxml = %s, for page %s", str(myxml), str(pageCounter))
 
                 resumptionToken = myxml.find('.//{*}resumptionToken')
                 if resumptionToken != None:
+                    self.logger.info("Resumption token found: %s",resumptionToken)
                     if resumptionToken.text == '0':
                         resumptionToken = None
                     else:
@@ -562,10 +567,9 @@ class MetadataHarvester(object):
                     encoding="UTF-8")
         except:
             self.logger.error("Could not create output file: %s", filename)
-            raise
+            raise Exception("Could not create output file.")
             sys.exit(2)
         return
-
 
     def harvestContent(self,URL,credentials=False,uname="foo",pw="bar"):
         ssl._create_default_https_context = ssl._create_unverified_context        
