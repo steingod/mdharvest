@@ -20,7 +20,7 @@ import sys
 import os
 import argparse
 import yaml
-from harvest_metadata import setInactive,initialise_logger
+from mdh_modules.harvest_metadata import setInactive,initialise_logger
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime

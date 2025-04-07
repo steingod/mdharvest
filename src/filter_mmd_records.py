@@ -47,7 +47,7 @@ import datetime
 from dateutil.parser import parse
 import logging
 from logging.handlers import TimedRotatingFileHandler
-from harvest_metadata import initialise_logger
+from mdh_modules.harvest_metadata import initialise_logger
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
