@@ -27,7 +27,7 @@ import sys
 import os
 import argparse
 import yaml
-from harvest_metadata import *
+from mdh_modules.harvest_metadata import *
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
@@ -129,7 +129,8 @@ def main(argv):
                         "&outputSchema=http://www.isotc211.org/2005/gmd" \
                         "&elementSetName=full"
         else:
-            mylog.warn("Protocol not supported yet")
+            mylog.warn("The chosen protocol is not supported yet")
+            continue
         numRec = 0
         mh = MetadataHarvester('run-harvest', cfg[section]['source'],
                 request,cfg[section]['raw'],cfg[section]['mmd'],

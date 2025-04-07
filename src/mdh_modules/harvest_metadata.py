@@ -1,26 +1,6 @@
 # -*- coding: UTF-8 -*-
-""" Script for harvesting metadata
-    Inspired by:
-        - harvest-metadata from https://github.com/steingod/mdharvest/tree/master/src
-        - code from http://lightonphiri.org/blog/metadata-harvesting-via-oai-pmh-using-python
-
-AUTHOR:     Trygve Halsne, 25.01.2017
-UPDATED:    Øystein Godøy, METNO/FOU, 2017-12-12 
-            Multiple..
-            Øystein Godøy, METNO/FOU, 2018-03-27 
-                First version suitable for regular use for OAI-PMH.
-            Øystein Godøy, METNO/FOU, 2018-05-09 
-                Working version for OAI-PMH with lxml
-            Øystein Godøy, METNO/FOU, 2018-05-10 
-                Working version with OGC CSW as well
-            Øystein Godøy, METNO/FOU, 2019-06-03 
-                Better handling of character encoding.
-            Øystein Godøy, METNO/FOU, 2021-02-19 
-                Improved logging and character encoding.
-
-USAGE:
-    - See usage
-    - Currently initiated with internal methods in class
+""" 
+Used by run_harvest.pyUsed by run_harvest.py
 
 COMMENTS (for further development):
     - Rewrite to lxml started for OpenSearch
@@ -161,7 +141,7 @@ class MetadataHarvester(object):
                 elif "iso" in self.srcfmt:
                     self.oaipmh_writeISOtoFile(myxml)
                 elif "rdf" in self.srcfmt:
-                    # Probably should discuss keyword, rdf is quite wide...
+                    # Probably should discuss keyword, rdf is quite wide but is used by several for DCAT...
                     self.oaipmh_writeDCATtoFile(myxml)
                 else:
                     raise "Metadata format not supported yet."
@@ -510,15 +490,16 @@ class MetadataHarvester(object):
         self.logger.warning('Not implemented yet')
         myns = {
                 'oai':'http://www.openarchives.org/OAI/2.0/',
-                'dcat':'http://www.w3.org/ns/dcat#'
+                'dcat':'http://www.w3.org/ns/dcat#',
+                'rdf':'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
                 }
         record_elements =  dom.xpath('/oai:OAI-PMH/oai:ListRecords/oai:record', 
                 namespaces=myns)
         self.logger.info("\n\tNumber of records found: %d",len(record_elements))
-        size_dif = len(record_elements)
+        size_rdf = len(record_elements)
 
         counter = 0
-        if size_dif != 0:
+        if size_rdf != 0:
             for record in record_elements:
                 # Check header if deleted
                 # TODO: Check if used with DCAT
@@ -542,13 +523,13 @@ class MetadataHarvester(object):
                 if dcatid == None:
                     self.logger.warn("Skipping record, no DIF ID")
                     continue
-                difid = difid.text
                 dcatrec = record.find('oai:metadata/rdf:RDF', namespaces=myns)
                 # TODO: Collect the linked information...
+                #print(ET.tostring(dcatrec, pretty_print=True))
 
                 # Dump to file
                 counter += 1
-                self.write_to_file(difrec, difid)
+                self.write_to_file(dcatrec, dcatid)
         else:
             self.logger.info("\n\tRecords did not contain DIF elements")
 

@@ -38,7 +38,7 @@ import uuid
 import lxml.etree as ET
 import codecs
 import yaml
-from harvest_metadata import initialise_logger, check_directories
+from mdh_modules.harvest_metadata import initialise_logger, check_directories
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
@@ -105,6 +105,7 @@ def main(argv):
     # This is the main method
     mydif = ['dif', 'dif_10', 'gcmd']
     myiso = ['iso','iso19139','iso19115']
+    mydcat = ['rdf']
 
     # Parse command line arguments
     try:
@@ -149,6 +150,8 @@ def main(argv):
             stylesheet =  '../xslt/dif-to-mmd.xsl'
         elif cfg[section]['mdkw'] in myiso:
             stylesheet =  '../xslt/iso-to-mmd.xsl'
+        elif cfg[section]['mdkw'] in mydcat:
+            stylesheet =  '../xslt/dcat-to-mmd.xsl'
         elif cfg[section]['mdkw'] in ['MM2']:
             stylesheet =  '../xslt/mm2-to-mmd.xsl'
         else:
