@@ -185,7 +185,7 @@ class Nc_to_mmd(object):
         if 'spatial_representation' in global_attributes:
             self.add_spatial_representation(root, ns_map, ncin, global_attributes)
 
-        # Add related_information. There is currently no relevant ACDD element to process here.
+        # Extract related_information from references attribute
         if 'references' in global_attributes:
             self.add_related_information(root, ns_map, ncin)
 
