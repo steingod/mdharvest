@@ -185,13 +185,15 @@ class Nc_to_mmd(object):
         if 'spatial_representation' in global_attributes:
             self.add_spatial_representation(root, ns_map, ncin, global_attributes)
 
-        # Add related_information. There is currently no relevant ACDD element to process here.
+        # Extract related_information from references attribute
+        if 'references' in global_attributes:
+            self.add_related_information(root, ns_map, ncin)
 
         # Add related_dataset. There is currently no relevant ACDD element to process here.
 
         # Extract dataset citation FIXME
-        if 'references' in global_attributes:
-            self.add_dataset_citation(root, ns_map, ncin)
+        #if 'references' in global_attributes:
+        #    self.add_dataset_citation(root, ns_map, ncin)
 
         # Extract data access??
         # Do not add here, handle this in traversing THREDDS catalogs
@@ -819,6 +821,46 @@ class Nc_to_mmd(object):
             ET.SubElement(myel,ET.QName(mynsmap['mmd'],'doi')).text = refdoi
         if refurl is not None:
             ET.SubElement(myel,ET.QName(mynsmap['mmd'],'url')).text = refurl
+
+    # supported formats
+    #         references = 'url (type:description)' comma separated list. Allow for , and : in description
+    #                                               as it can be common with citations
+    #         references = 'url (type)' comma separated list
+    #         references = 'url' comma separated list, assume default type: Other documentation
+    def add_related_information(self, myxmltree, mynsmap, ncin):
+        # split comma only outside parethesis
+        myref = re.split(r',\s*(?![^()]*\))', getattr(ncin, 'references'))
+        valid_ref = self.vocabulary.ControlledVocabulary.RelatedInformationTypes
+        for ref in myref:
+            if '(' in ref and ')' in ref:
+                ref = ref.strip().split('(')
+                refresource = ref[0].strip()
+                reftypedesc = ref[1].split(')')[0].strip()
+                if ':' in reftypedesc:
+                    #split only once, as description might contain ":"
+                    reftype = reftypedesc.split(':',1)[0].strip()
+                    #pick description only if the type:description is provided else pick all as description
+                    #and use fallback Other documentation as type
+                    if reftype not in valid_ref:
+                        reftype = 'Other documentation'
+                        refdesc = reftypedesc
+                    else:
+                        refdesc = reftypedesc.split(':',1)[1].strip()
+                else:
+                    reftype = reftypedesc
+                    if reftype not in valid_ref:
+                        reftype = 'Other documentation'
+                    refdesc = reftypedesc
+            else:
+                refresource = ref.strip()
+                reftype = 'Other documentation'
+                refdesc = 'Other documentation'
+
+            if validators.url(refresource):
+                myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'related_information'))
+                ET.SubElement(myel,ET.QName(mynsmap['mmd'],'type')).text = reftype
+                ET.SubElement(myel,ET.QName(mynsmap['mmd'],'description')).text = refdesc
+                ET.SubElement(myel,ET.QName(mynsmap['mmd'],'resource')).text = refresource
 
     # Add OPeNDAP URL etc if processing an OPeNDAP URL. 
     def add_web_services(self, myxmltree, mynsmap):
