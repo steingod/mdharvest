@@ -460,7 +460,7 @@ def check_mmd4parent(myfile, myparent, mylog, dry_run):
         mylog.warn('Could not properly parse: %s', myfile)
         myxml.warn(e)
     myroot = myxml.getroot()
-    if myroot.find("mmd:related_dataset[@relation_type='parent']", namespaces=myroot.nsmap):
+    if myroot.find("mmd:related_dataset[@relation_type='parent']", namespaces=myroot.nsmap) is not None:
         # Need to add a check that correct parent is used...
         mylog.info('Nothing to do, parent/child relations are established.')
     else:
