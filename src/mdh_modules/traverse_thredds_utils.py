@@ -462,7 +462,13 @@ def check_mmd4parent(myfile, myparent, mylog, dry_run):
     myroot = myxml.getroot()
     if myroot.find("mmd:related_dataset[@relation_type='parent']", namespaces=myroot.nsmap) is not None:
         # Need to add a check that correct parent is used...
-        mylog.info('Nothing to do, parent/child relations are established.')
+        myid = myroot.find("mmd:related_dataset[@relation_type='parent']", namespaces=myroot.nsmap).text
+        if myid != myparent:
+            mylog.warn('Inconsistent relationship found.')
+            return
+        else:
+            mylog.info('Nothing to do, parent/child relations are established.')
+            return
     else:
         mylog.info('No reference to parent found in this document.')
         try:
