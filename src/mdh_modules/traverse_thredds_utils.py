@@ -475,6 +475,8 @@ def check_mmd4parent(myfile, myparent, mylog, dry_run):
             myxml.write(myfile)
         except Exception as e:
             mylog.error('Could not write new content to: %s', myfile)
+    else:
+        mylog.info('This is a dry run, no editing of files done.')
 
 def add_parent2mmd(myxml, myparent, mylog):
     mylog.info('Adding parent identifier to file')
