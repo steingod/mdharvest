@@ -399,7 +399,7 @@ def check_mmd_tree(tdsdir, mylog, dry_run):
                     mylog.info('Parent file, continues...')
                     continue
                 try: 
-                    check_mmd4parent('/'.join([root,f]), parentid, mylog)
+                    check_mmd4parent('/'.join([root,f]), parentid, mylog, dry_run)
                 except Exception as e:
                     mylog.warn('Something went wrong in check_mmd4parent')
                     continue
@@ -446,7 +446,7 @@ def get_parent_id(myfile, mylog):
 
     return(myid)
 
-def check_mmd4parent(myfile, myparent, mylog):
+def check_mmd4parent(myfile, myparent, mylog, dry_run):
     """
     Check the content of MMD file for presence of parent identifier
     """
@@ -469,11 +469,12 @@ def check_mmd4parent(myfile, myparent, mylog):
             mynewxml = add_parent2mmd(myroot, myparent, mylog)
         except Exception as e:
             mylog.warn('Could not add identifier to document.')
-    try:
-        #myxml.write('-'.join([myfile,'new']))
-        myxml.write(myfile)
-    except Exception as e:
-        mylog.error('Could not write new content to: %s', myfile)
+    if not dry_run:
+        try:
+            #myxml.write('-'.join([myfile,'new']))
+            myxml.write(myfile)
+        except Exception as e:
+            mylog.error('Could not write new content to: %s', myfile)
 
 def add_parent2mmd(myxml, myparent, mylog):
     mylog.info('Adding parent identifier to file')
