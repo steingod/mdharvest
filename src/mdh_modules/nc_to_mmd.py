@@ -216,6 +216,9 @@ class Nc_to_mmd(object):
         if 'processing_level' in global_attributes or 'operational_status' in global_attributes:
             self.add_operational_status(root, ns_map, ncin, global_attributes)
 
+        # Since in nc_to_mmd we assume files are in netCDF format
+        self.add_storage_information(root, ns_map)
+
         # Check if services should be parsed
         if self.parse_services:
             self.add_web_services(root, ns_map)
@@ -862,6 +865,11 @@ class Nc_to_mmd(object):
                 ET.SubElement(myel,ET.QName(mynsmap['mmd'],'description')).text = refdesc
                 ET.SubElement(myel,ET.QName(mynsmap['mmd'],'resource')).text = refresource
 
+    def add_storage_information(self, myxmltree, mynsmap):
+        myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'storage_information'))
+        myelff = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'file_format'))
+        myelff.text = 'NetCDF-CF'
+
     # Add OPeNDAP URL etc if processing an OPeNDAP URL. 
     def add_web_services(self, myxmltree, mynsmap):
         # Add OPeNDAP data_access if "netcdf_product" is OPeNDAP url
@@ -884,7 +892,10 @@ class Nc_to_mmd(object):
             # Not able to guess URL's for HYRAX. This is not very robust.
             if 'dodsC' in self.netcdf_product:
                 add_wms_data_access = True
-                add_http_data_access = True
+                if not self.netcdf_product.lower().endswith('.ncml'):
+                    add_http_data_access = True
+                else:
+                    add_http_data_access = False
             else:
                 add_wms_data_access = False
                 add_http_data_access = False

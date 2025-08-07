@@ -309,7 +309,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         myroot.insert(-1,related_information)
 
         # Add data_access (not done automatically)
-        if ds.download_url():
+        if ds.download_url() and not infile.lower().endswith('.ncml'):
             data_access = ET.Element(
                     '{http://www.met.no/schema/mmd}data_access')
             data_access_type = ET.SubElement(data_access,
