@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+#
+#PURPOSE: Add adc.met.no landing page for records with no.met.adc in the metadata_identifier
+#         Updating the last_metadata_update with Major modification.
+#
+#NOTE: The script is overwriting the original MMD record.
+#
+#USAGE: The script parses a whole directory or file, given as input, looking for a no.met.adc:UUID in a metadata_identifier tag
+#       in all files with .xml file extention and updating the landing page to https://adc.met.no/dataset/uuid
+#       If the old landing page is on thredds.met.no this url will be moved to Data server landing page.
+#
+#EXAMPLE: ./add_adc_landingpage.py -d /home/user/mydir/dir1
+#EXAMPLE: ./add_adc_landingpage.py -d /home/user/mydir/dir1 -r
+#EXAMPLE: ./add_adc_landingpage.py -i /home/user/mydir/file.xml
+#
+#AUTHOR:
+#
+#
+import sys
+import os
+import argparse
+import uuid
+import datetime as dt
+import lxml.etree as etree
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+            description='Updates landing page to adc\n'+
+            '-d: directory path\n'+
+            '-r: parse recursively\n'+
+            '-i: parse file\n'+
+            './add_adc_landingpage.py -d /home/user/mydir')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-d", "--dir", help='path to the directory')
+    parser.add_argument("-r", "--rec", help='update recursively', action='store_true')
+    group.add_argument("-i", "--file", help='input file in xml')
+
+    try:
+        args = parser.parse_args()
+    except:
+        sys.exit()
+    return args
+
+
+def update_landingpage(infile):
+    tree = etree.parse(infile)
+    etree.register_namespace('mmd','http://www.met.no/schema/mmd')
+    # check if identifier exists, otherwise exit
+    try:
+        existingid = tree.find('{http://www.met.no/schema/mmd}metadata_identifier')
+        mdid = existingid.text
+    except:
+        print("No metadata identifier was found in this file")
+    if 'no.met.adc' in mdid:
+        print('identifier has no.met.adc: ', mdid)
+        try:
+            rel_info = tree.find('{http://www.met.no/schema/mmd}related_information/[{http://www.met.no/schema/mmd}type = "Dataset landing page"]')
+        except:
+            print("Error getting rel info")
+
+        # An landing page is found
+        if rel_info is not None:
+            rel_info_resource = rel_info.find('{http://www.met.no/schema/mmd}resource')
+            if 'adc.met.no' in rel_info_resource.text:
+                print('has DOI or already updated. Landing page not changed')
+                return
+            elif 'thredds.met.no' not in rel_info_resource.text:
+                print('not thredds.met.no: check!')
+                return
+            else:
+                #create new element with thredds reference
+                old_ds = tree.find('{http://www.met.no/schema/mmd}related_information/[{http://www.met.no/schema/mmd}type = "Data server landing page"]')
+                #adding data server from old landing page
+                if old_ds is None:
+                    dataserver = etree.Element('{http://www.met.no/schema/mmd}related_information')
+                    ds_type = etree.SubElement(dataserver,'{http://www.met.no/schema/mmd}type')
+                    ds_type.text = "Data server landing page"
+                    ds_type_desc = etree.SubElement(dataserver,'{http://www.met.no/schema/mmd}description')
+                    if rel_info_resource.text.endswith("catalog.html"):
+                        ds_type_desc.text = "Access to data server catalog landing page"
+                    else:
+                        ds_type_desc.text = "Access to data server landing page"
+                    ds_resource = etree.SubElement(dataserver,'{http://www.met.no/schema/mmd}resource')
+                    ds_resource.text = rel_info_resource.text
+                    rel_info.addnext(dataserver)
+                #update landing page
+                newlp = 'https://adc.met.no/dataset/' + mdid.split('no.met.adc:')[1]
+                rel_info_resource.text = newlp
+                rel_info_des = rel_info.find('{http://www.met.no/schema/mmd}description')
+                rel_info_des.text = 'Dataset landing page'
+                lastmdupd = tree.find('{http://www.met.no/schema/mmd}last_metadata_update')
+                upd = etree.SubElement(lastmdupd,'{http://www.met.no/schema/mmd}update')
+                lastmdupd.insert(0, upd)
+                etree.SubElement(upd, '{http://www.met.no/schema/mmd}datetime').text = dt.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                etree.SubElement(upd, '{http://www.met.no/schema/mmd}type').text = 'Major modification'
+                if old_ds is None:
+                    etree.SubElement(upd, '{http://www.met.no/schema/mmd}note').text = 'Update landing page resource and add data server resource'
+                else:
+                    etree.SubElement(upd, '{http://www.met.no/schema/mmd}note').text = 'Update landing page resource'
+                etree.indent(tree)
+                etree.tostring(tree, pretty_print=True).decode()
+                tree.write(infile, xml_declaration=True, encoding="UTF-8", method="xml")
+        else:
+            print('no landing page found')
+            holder = tree.find('{http://www.met.no/schema/mmd}geographic_extent')
+            lp = etree.Element('{http://www.met.no/schema/mmd}related_information')
+            lp_type = etree.SubElement(lp,'{http://www.met.no/schema/mmd}type')
+            lp_type.text = 'Dataset landing page'
+            lp_des = etree.SubElement(lp,'{http://www.met.no/schema/mmd}description')
+            lp_des.text = 'Dataset landing page'
+            lp_res = etree.SubElement(lp,'{http://www.met.no/schema/mmd}resource')
+            lp_res.text = 'https://adc.met.no/dataset/' + mdid.split('no.met.adc:')[1]
+            holder.addnext(lp)
+            lastmdupd = tree.find('{http://www.met.no/schema/mmd}last_metadata_update')
+            upd = etree.SubElement(lastmdupd,'{http://www.met.no/schema/mmd}update')
+            lastmdupd.insert(0, upd)
+            etree.SubElement(upd, '{http://www.met.no/schema/mmd}datetime').text = dt.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+            etree.SubElement(upd, '{http://www.met.no/schema/mmd}type').text = 'Major modification'
+            etree.SubElement(upd, '{http://www.met.no/schema/mmd}note').text = 'Add landing page resource'
+            etree.indent(tree)
+            etree.tostring(tree, pretty_print=True).decode()
+            tree.write(infile, xml_declaration=True, encoding="UTF-8", method="xml")
+
+def main(argv):
+    input_directory = None
+    input_file = None
+    parse_recursive = False
+
+    try:
+        args = parse_arguments()
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    if args.dir:
+        input_directory = args.dir
+        if args.rec:
+            parse_recursive = True
+    elif args.file:
+        input_file = args.file
+        if args.rec:
+            assert False, '-r can be only for directory'
+    else:
+        assert False, 'Unhandled option'
+
+    print(input_directory, input_file, parse_recursive)
+
+
+    if input_directory is not None and parse_recursive == True:
+        print('parsing dir recursively')
+        for subdir, dirs, files in os.walk(input_directory):
+            print('entering directory', subdir)
+            for f in files:
+                if f.endswith('.xml'):
+                    update_landingpage(os.path.join(subdir, f))
+    elif input_directory is not None and parse_recursive == False:
+        print('parsing dir')
+        for f in os.listdir(input_directory):
+            if f.endswith('.xml'):
+                update_landingpage(os.path.join(input_directory, f))
+    elif input_file is not None and input_directory is None:
+        print('parsing file')
+        if input_file.endswith('.xml'):
+            update_landingpage(input_file)
+    else:
+        print('Could not run the update')
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+
