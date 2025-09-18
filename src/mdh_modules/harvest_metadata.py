@@ -168,7 +168,7 @@ class MetadataHarvester(object):
                 #resumptionToken = urlencode({'resumptionToken':resumptionToken})
                 resumptionToken = 'resumptionToken='+resumptionToken
                 # Ideally this should be handled more smooth
-                resumptionTokenSpecialTreatment = ['geonetwork', 'eu-interact']
+                resumptionTokenSpecialTreatment = ['geonetwork', 'eu-interact', 'nilu']
                 #if 'geonetwork' in baseURL:
                 if any(x in baseURL for x in resumptionTokenSpecialTreatment):
                     getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
