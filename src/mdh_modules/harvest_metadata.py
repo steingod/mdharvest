@@ -387,7 +387,8 @@ class MetadataHarvester(object):
                     # Extract identifier. These ID appears like oai:<endpoint>:<id>, need to extract the last part, but keep in mind some data centres use : in identifiers.
                     mmdid = oaiid.split(':',3)[2]
                     # Update MMD record, i.e. set Inactive if existing
-                    setInactive(self.mmdDir,mmdid, self.logger)
+                    setInactive(self.mmdDir, mmdid, self.logger)
+                    continue
                 isoid = record.find('oai:metadata/gmi:MI_Metadata/gmd:fileIdentifier/gco:CharacterString',
                         namespaces=myns)
                 if isoid == None:
