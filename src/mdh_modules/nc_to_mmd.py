@@ -866,9 +866,13 @@ class Nc_to_mmd(object):
                 ET.SubElement(myel,ET.QName(mynsmap['mmd'],'resource')).text = refresource
 
     def add_storage_information(self, myxmltree, mynsmap):
-        myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'storage_information'))
-        myelff = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'file_format'))
-        myelff.text = 'NetCDF-CF'
+        file_name = self.netcdf_product.split('/')[-1]
+        file_format = file_name.split('.')[-1]
+        valid_extensions = {'nc': 'NetCDF-CF', 'nc4':'NetCDF-CF', 'ncml': 'NcML'}
+        if file_format in valid_extensions.keys():
+            myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'storage_information'))
+            myelff = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'file_format'))
+            myelff.text = valid_extensions[file_format]
 
     # Add OPeNDAP URL etc if processing an OPeNDAP URL. 
     def add_web_services(self, myxmltree, mynsmap):
