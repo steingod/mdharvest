@@ -3,6 +3,7 @@ from SPARQLWrapper import SPARQLWrapper, JSON
 import datetime
 import argparse
 import sys
+import requests
 
 
 if __name__ == '__main__':
@@ -207,6 +208,48 @@ if __name__ == '__main__':
 
         return(label)
 
+    def get_keywords():
+
+        gemet = get_gemet()
+        northemes = get_northemes()
+        if gemet and northemes:
+            f = open('KEYWORDS.py','w')
+            update = datetime.datetime.now()
+            f.write('#last fetch: '+str(update)+"\n")
+            f.write('GEMET = ')
+            f.write(str(gemet)+"\n")
+            f.write('NORTHEMES = ')
+            f.write(str(northemes))
+            f.close()
+        else:
+            print('Error fetching keywords concepts: use last fetched vocabulary list!')
+
+
+    def get_gemet():
+        url = 'https://www.eionet.europa.eu/gemet/getTopmostConcepts?thesaurus_uri=http://inspire.ec.europa.eu/theme/&language=en'
+        try:
+            response = requests.get(url).json()
+            validgemet = {}
+            for r in response:
+                validgemet[r['preferredLabel']['string']] = {'uri': r['uri']}
+        except:
+            print("Could not fetch GEMET")
+            return
+
+        return(validgemet)
+
+    def get_northemes():
+        url = 'https://register.geonorge.no/api/metadata-kodelister/nasjonal-temainndeling.json?lang=en'
+        try:
+            response = requests.get(url).json()
+            validnorthemes = {}
+            for r in response['containeditems']:
+                validnorthemes[r['label']] = {'uri': r['id']}
+        except:
+            print("Could not fetch NORTHEMES")
+            return
+
+        return(validnorthemes)
 
     def main(voc):
         vocabno = SPARQLWrapper("https://vocab.met.no/skosmos/sparql")
@@ -226,11 +269,13 @@ if __name__ == '__main__':
             get_MMDvocab(collections, vocabno)
         if voc == 'cf':
             cfnames = get_cfnames(vocabno)
+        if voc == 'keywords':
+            get_keywords()
 
-    parser = argparse.ArgumentParser(description='Update controlled vocabularies: MMD and CF/GCMD')
+    parser = argparse.ArgumentParser(description='Update controlled vocabularies: MMD, CF/GCMD and keywords')
     parser.add_argument('vocabulary_type',
-                        choices = ['mmd','cf'],
-                        help="which vocabularies to update: mmd or cf are valid strings")
+                        choices = ['mmd','cf','keywords'],
+                        help="which vocabularies to update: mmd, cf or keywords are valid strings")
     try:
         args = parser.parse_args()
     except:

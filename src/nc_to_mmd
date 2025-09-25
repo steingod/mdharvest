@@ -5,6 +5,7 @@ import sys
 from mdh_modules.nc_to_mmd import main
 import vocab.ControlledVocabulary
 import vocab.CFGCMD
+import vocab.KEYWORDS
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

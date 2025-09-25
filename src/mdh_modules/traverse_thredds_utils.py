@@ -19,6 +19,7 @@ import threddsclient
 from mdh_modules.nc_to_mmd import Nc_to_mmd
 import vocab.ControlledVocabulary
 import vocab.CFGCMD
+import vocab.KEYWORDS
 import lxml.etree as ET
 import uuid
 import re
