@@ -20,6 +20,7 @@ import lxml.etree as ET
 from datetime import datetime
 import vocab.ControlledVocabulary
 import vocab.CFGCMD
+import vocab.KEYWORDS
 import pytz
 import uuid
 import validators
