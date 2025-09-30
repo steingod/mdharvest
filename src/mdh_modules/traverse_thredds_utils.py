@@ -88,6 +88,9 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
             os.makedirs(newdstdir)
         # Check input filename
         infile = ds.opendap_url()
+        if not infile:
+            mylog.info("Not a proper filename, skipping parsing...")
+            continue
         if not infile.lower().endswith(('.nc','.ncml')):
             mylog.info('No NCML or NetCDF file, skipping parsing...')
             continue
