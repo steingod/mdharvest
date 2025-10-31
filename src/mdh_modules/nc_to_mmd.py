@@ -56,6 +56,13 @@ class Nc_to_mmd(object):
             incf = False
         return incf
 
+    def isvalidk(self, k, lookup):
+        if k in lookup :
+            invocab = True
+        else:
+            invocab = False
+        return invocab
+
     def to_mmd(self):
         """
         Method for parsing content of NetCDF file, mapping discovery
@@ -95,7 +102,6 @@ class Nc_to_mmd(object):
             iscf = self.iscfstdn(cfc, self.vocabulary.CFGCMD.CFNAMES)
             if iscf:
                 cf_standard_names.append(cfc)
-        #print(cf_standard_names)
 
         # Create XML file with namespaces
         ns_map = {'mmd': "http://www.met.no/schema/mmd",
@@ -682,9 +688,17 @@ class Nc_to_mmd(object):
             elif myvoc == 'CFSTDN':
                 ET.SubElement(mykwcf, ET.QName(mynsmap['mmd'],'keyword')).text = kw
             elif myvoc == 'NORTHEMES':
-                ET.SubElement(mykwnt, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+                isnorthemes = self.isvalidk(kw, self.vocabulary.KEYWORDS.NORTHEMES)
+                if isnorthemes:
+                    ET.SubElement(mykwnt, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+                else:
+                    print(kw, " is not a valid NORTHEMES. Not adding.")
             elif myvoc == 'GEMET':
-                ET.SubElement(mykwgemet, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+                isgemet = self.isvalidk(kw, self.vocabulary.KEYWORDS.GEMET)
+                if isgemet:
+                    ET.SubElement(mykwgemet, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+                else:
+                    print(kw, " is not a valid GEMET. Not adding.")
             elif myvoc == 'None':
                 if re.match('Earth Science >',el,re.IGNORECASE):
                     ET.SubElement(mykwgcmdsk, ET.QName(mynsmap['mmd'],'keyword')).text = kw
