@@ -41,20 +41,24 @@ if __name__ == '__main__':
 
     # Find existing collection keyword and position
     mynode = myxml.find("./mmd:collection",namespaces=myroot.nsmap)
+    newcollections = [cl.strip() for cl in args.collection.split(',')]
     if mynode == None:
-        print('No collection found, not handling this now.')
-        sys.exit()
-    mynodes = myxml.findall("./mmd:collection",namespaces=myroot.nsmap)
-    for el in args.collection.split(','):
+        print('No collection found, adding this now.')
+        mynode = myxml.find("./mmd:last_metadata_update",namespaces=myroot.nsmap)
+        for ncl in newcollections:
+            mynewnode = ET.Element("{http://www.met.no/schema/mmd}collection")
+            mynewnode.text = ncl
+            mynode.addprevious(mynewnode)
+    else:
+        mynodes = myxml.findall("./mmd:collection",namespaces=myroot.nsmap)
+        oldcollections = []
         for cl in mynodes:
-            if el in cl.text:
-                print('Collection',el,'is already added.')
-                break
-            else:
-                mynewnode = ET.Element("{http://www.met.no/schema/mmd}collection")
-                mynewnode.text = el
-                mynode.addprevious(mynewnode)
-                break
+            oldcollections.append(cl.text)
+        collections_toadd = list(set(newcollections) - set(oldcollections))
+        for ncl in collections_toadd:
+            mynewnode = ET.Element("{http://www.met.no/schema/mmd}collection")
+            mynewnode.text = ncl
+            mynode.addprevious(mynewnode)
 
     ET.indent(myroot, space="  ")
     # Dump results to file
