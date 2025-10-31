@@ -55,10 +55,11 @@ def add_at(myfile, isotc, overwrite, append):
             print('Replacing existing element in ', myfile)
             myel.getparent().remove(myel)
     else:
-        myel =  myroot.find("mmd:collection", namespaces=myroot.nsmap)
-        myel.addprevious(myp)
+        myel =  myroot.findall("mmd:temporal_extent", namespaces=myroot.nsmap)[-1]
+        myel.addnext(myp)
 
     # Dump results to file
+    ET.indent(myroot, space="  ")
     myxml.write(myfile, pretty_print=True)
 
     return

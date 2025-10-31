@@ -111,4 +111,5 @@ if __name__ == '__main__':
         myroot.append(myp)
 
     # Dump results to file
+    ET.indent(myroot, space="  ")
     myxml.write(args.infile, pretty_print=True)

@@ -68,11 +68,12 @@ def add_platform(myfile, platform, overwrite, append):
             print('Replacing existing element in ', myfile)
             myel.getparent().remove(myel)
     else:
-        myel =  myroot.find("mmd:collection", namespaces=myroot.nsmap)
+        myel =  myroot.findall("mmd:geographic_extent", namespaces=myroot.nsmap)[-1]
         myel.addnext(myp)
 
     # Dump results to file
     #myxml.write('myfile.xml', pretty_print=True)
+    ET.indent(myroot, space="  ")
     myxml.write(myfile, pretty_print=True)
 
     return

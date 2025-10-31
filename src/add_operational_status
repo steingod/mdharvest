@@ -53,10 +53,11 @@ def add_os(myfile, os, overwrite):
                 el.getparent().remove(el)
     else:
         print('No previous element found, adding now...')
-        myel =  myroot.find("mmd:collection", namespaces=myroot.nsmap)
+        myel =  myroot.findall("mmd:geographic_extent", namespaces=myroot.nsmap)[-1]
         myel.addnext(myp)
 
     # Dump results to file
+    ET.indent(myroot, space="  ")
     myxml.write(myfile, pretty_print=True)
 
     return
