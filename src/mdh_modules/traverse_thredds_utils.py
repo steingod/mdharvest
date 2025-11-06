@@ -33,6 +33,8 @@ def sanitize_filename(filename):
     """
     if filename.endswith(".nc"):
         name = filename.split('.nc')[0]
+    elif filename.endswith(".nc4"):
+        name = filename.split('.nc4')[0]
     else:
         name = filename
 
@@ -92,7 +94,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         if not infile:
             mylog.info("Not a proper filename, skipping parsing...")
             continue
-        if not infile.lower().endswith(('.nc','.ncml')):
+        if not infile.lower().endswith(('.nc','.nc4','.ncml')):
             mylog.info('No NCML or NetCDF file, skipping parsing...')
             continue
         # Create output filename
@@ -142,7 +144,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         # Add parent record if record is deemed child
         if myparentid:
             myrelatedds = myxml.find("./mmd:metadata_identifier", myroot.nsmap)
-            if infile.lower().endswith('.nc') and not myrelatedds:
+            if infile.lower().endswith(('.nc','.nc4')) and not myrelatedds:
                 print('assumes file to be child')
                 myreldata = ET.Element("{http://www.met.no/schema/mmd}related_dataset")
                 myreldata.set('relation_type','parent')
