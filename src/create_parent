@@ -1,0 +1,465 @@
+#!/usr/bin/python3
+import sys
+import os
+import argparse
+import datetime
+import lxml.etree as ET
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+            description='Creates a parent MMD record. Inputs are: \n'+
+            'inpath (-i) or inlist (-l): either a path to a directory containing children or a list (file) with paths to the children or \n'+
+            'output (-o): either the path of where to write the default parent.txt file or the path + parent_filename.xml or the parent_filename.xml only\n'+
+            '             this is required if a list (-l) of children is provided\n'+
+            'e.g. create_parent -i /home/user/mydatadir\n'+
+            'e.g. create_parent -i /home/user/mydatadir -o /home/user/otherdir/\n'+
+            'e.g. create_parent -i /home/user/mydatadir -o /home/user/otherdir/parent_filename.xml\n'+
+            'e.g. create_parent -i /home/user/mydatadir -o parent_filename.xml\n'+
+            'e.g. create_parent -l /home/user/mydatadir/listfiles.txt -o /home/user/otherdir/'+
+            '...'
+            )
+    parser.add_argument("-i", "--inpath", help='path to the directory with children')
+    parser.add_argument("-l", "--inlist", help='file containg the a list of full paths to children')
+    parser.add_argument("-o", "--output", help='path to directory where to place the parent.xml file or the path to the parent.xml', default=None)
+
+    try:
+        args = parser.parse_args()
+    except:
+        sys.exit()
+    return args
+
+
+def collection_values(myxml, valid_keywords, all_keywords, all_isotopic, bbox, dates,
+                      all_personnel, ds_status, all_projects, all_activity, op_status,
+                      all_relatedinfo, all_useconstraint, all_accessconstraint, all_collections, all_datacenter):
+
+    mynsmap = {'mmd': "http://www.met.no/schema/mmd",
+               'xml': "http://www.w3.org/XML/1998/namespace"}
+
+    myroot = myxml.getroot()
+
+    #dataset status
+    dataset_status =  myroot.find("mmd:dataset_production_status", namespaces=myroot.nsmap)
+    if dataset_status.text not in ds_status:
+        ds_status.append(dataset_status.text)
+
+    #operational_status
+    operational_status =  myroot.find("mmd:operational_status", namespaces=myroot.nsmap)
+    if operational_status is not None and operational_status.text not in op_status:
+        op_status.append(operational_status.text)
+
+    #activity type
+    activity_type =  myroot.findall("mmd:activity_type", namespaces=myroot.nsmap)
+    for at in list(activity_type):
+        if at.text not in all_activity:
+            all_activity.append(at.text)
+
+    #collections
+    collections =  myroot.findall("mmd:collection", namespaces=myroot.nsmap)
+    for cl in list(collections):
+        if cl.text not in all_collections:
+            all_collections.append(cl.text)
+
+    #isotopic
+    isotopic =  myroot.findall("mmd:iso_topic_category", namespaces=myroot.nsmap)
+    for isot in list(isotopic):
+        if isot.text not in all_isotopic:
+            all_isotopic.append(isot.text)
+
+    #use_constraint
+    use_constraint =  myroot.find("mmd:use_constraint", namespaces=myroot.nsmap)
+    ucs = use_constraint.getchildren()
+    ucdic = {}
+    for uc in ucs:
+        ucdic[uc.tag] = uc.text
+    if ucdic not in all_useconstraint:
+        all_useconstraint.append(ucdic)
+
+    #access_constraint
+    access_constraint =  myroot.find("mmd:access_constraint", namespaces=myroot.nsmap)
+    if access_constraint is not None and access_constraint.text not in all_accessconstraint:
+        all_accessconstraint.append(access_constraint.text)
+
+    #projects
+    projects =  myroot.findall("mmd:project", namespaces=myroot.nsmap)
+    for proj in list(projects):
+        prj = proj.getchildren()
+        prjdic = {}
+        for p in prj:
+            prjdic[p.tag] = p.text
+        if prjdic not in all_projects:
+            all_projects.append(prjdic)
+
+    #personnel
+    personnel =  myroot.findall("mmd:personnel", namespaces=myroot.nsmap)
+    for p in list(personnel):
+        pp = p.getchildren()
+        ppdic = {}
+        for el in pp:
+            ppdic[el.tag] = el.text
+        if ppdic not in all_personnel:
+            all_personnel.append(ppdic)
+
+    #related_info
+    related_information =  myroot.findall("mmd:related_information", namespaces=myroot.nsmap)
+    for ri in list(related_information):
+        rrii = ri.getchildren()
+        ridic = {}
+        for el in rrii:
+            ridic[el.tag] = el.text
+        if ridic not in all_relatedinfo:
+            all_relatedinfo.append(ridic)
+
+
+    # Extract valid vocabularies and their keywords
+    all_keyword_elements = myroot.findall("mmd:keywords", namespaces=myroot.nsmap)
+
+    for keyword_group in all_keyword_elements:
+        vocab = keyword_group.get("vocabulary")  # Get the vocabulary name
+
+        # Ensure the vocabulary is valid and not already in the dictionary -> this is wrong. We need to append to the
+        # vocabulary
+        if vocab in valid_keywords:
+            if vocab not in all_keywords:
+                all_keywords[vocab] = []
+
+            # Find all keywords associated with this vocabulary
+            vocab_keywords = keyword_group.findall("mmd:keyword", namespaces=myroot.nsmap)
+
+            for kw in vocab_keywords:
+                if kw.text and kw.text not in all_keywords[vocab]:  # Ensure no duplicates
+                    all_keywords[vocab].append(kw.text)
+
+
+    #datacenter
+    datacenter =  myroot.find("mmd:data_center", namespaces=myroot.nsmap)
+    if datacenter is not None:
+        dcdic = {}
+        for i in datacenter.iterdescendants():
+            if i.tag != '{http://www.met.no/schema/mmd}data_center_name':
+                dcdic[i.tag] = i.text
+        if dcdic not in all_datacenter:
+            all_datacenter.append(dcdic)
+
+    # Find start
+    start =  myroot.find("mmd:temporal_extent/mmd:start_date", namespaces=myroot.nsmap)
+    if start is not None:
+        if 'start' in dates.keys():
+            if start.text < dates['start']:
+                dates['start'] = start.text
+        else:
+            dates['start'] = start.text
+
+    # Find end
+    end =  myroot.find("mmd:temporal_extent/mmd:end_date", namespaces=myroot.nsmap)
+    if end is not None and end.text is not None:
+        if 'end' in dates.keys():
+            if end.text > dates['end']:
+                dates['end'] = end.text
+        else:
+            dates['end'] = end.text
+    else:
+        dates['end'] = None
+
+
+    # Find bbox
+    north =  float(myroot.find("mmd:geographic_extent/mmd:rectangle/mmd:north", namespaces=myroot.nsmap).text)
+    south =  float(myroot.find("mmd:geographic_extent/mmd:rectangle/mmd:south", namespaces=myroot.nsmap).text)
+    east =  float(myroot.find("mmd:geographic_extent/mmd:rectangle/mmd:east", namespaces=myroot.nsmap).text)
+    west =  float(myroot.find("mmd:geographic_extent/mmd:rectangle/mmd:west", namespaces=myroot.nsmap).text)
+
+    if north > bbox['north']:
+        bbox['north'] = north
+    if south < bbox['south']:
+        bbox['south'] = south
+    if east > bbox['east']:
+        bbox['east'] = east
+    if west < bbox['west']:
+        bbox['west'] = west
+
+    return(valid_keywords, all_keywords, all_isotopic, bbox, dates,
+                      all_personnel, ds_status, all_projects, all_activity, op_status,
+                     all_relatedinfo, all_useconstraint, all_collections, all_datacenter)
+
+def create_parent(path, output=None):
+    #set all default lists
+    all_isotopic = []
+    bbox = {'north' : -90, 'south' : 90, 'east' : -180, 'west' : 180}
+    dates = {}
+    all_personnel = []
+    ds_status = []
+    all_projects = []
+    all_activity = []
+    op_status = []
+    all_relatedinfo = []
+    all_useconstraint = []
+    all_accessconstraint = []
+    all_collections = []
+    all_datacenter = []
+    all_keywords = {}
+    valid_keywords = ['GCMDSK', 'GCMDLOC', 'GCMDPROV', 'CFSTDN', 'GEMET', 'NORTHEMES', 'None']
+
+    mynsmap = {'mmd': "http://www.met.no/schema/mmd",'xml': "http://www.w3.org/XML/1998/namespace"}
+
+    # Read input files
+    # When path is provided, travers all subdirectories
+    if isinstance(path, str):
+        for root, subdirs, files in os.walk(path):
+            for file in files:
+                if not file.endswith('.xml'):
+                    print(f"Skipping non-XML file: {file}")
+                    continue
+                print("Parsing child: ", os.path.join(root, file))
+                try:
+                    myxml = ET.parse(os.path.join(root, file))
+                except Exception as e:
+                    print(f"Couldn't parse input file {os.path.join(root, file)}: {e}")
+                    continue
+                collection_values(myxml, valid_keywords, all_keywords, all_isotopic, bbox, dates,
+                                all_personnel, ds_status, all_projects, all_activity, op_status,
+                                all_relatedinfo, all_useconstraint, all_accessconstraint, all_collections, all_datacenter)
+
+    # When file is provided parse the list of paths
+    if isinstance(path, list):
+        for file in path:
+            print("Parsing child: ", file)
+            try:
+                myxml = ET.parse(file)
+            except:
+                print("Couldn't parse input file",file)
+                raise
+            collection_values(myxml, valid_keywords, all_keywords, all_isotopic, bbox, dates,
+                                  all_personnel, ds_status, all_projects, all_activity, op_status,
+                                  all_relatedinfo, all_useconstraint, all_accessconstraint, all_collections, all_datacenter)
+
+    #create parent
+    root = ET.Element(ET.QName(mynsmap['mmd'], 'mmd'), nsmap=mynsmap)
+
+    ET.SubElement(root,ET.QName(mynsmap['mmd'],'metadata_identifier'))
+    title = ET.SubElement(root,ET.QName(mynsmap['mmd'],'title'))
+    title.set('{http://www.w3.org/XML/1998/namespace}lang','en')
+    abstract = ET.SubElement(root,ET.QName(mynsmap['mmd'],'abstract'))
+    abstract.set('{http://www.w3.org/XML/1998/namespace}lang','en')
+    mdstatus = ET.SubElement(root,ET.QName(mynsmap['mmd'],'metadata_status'))
+    mdstatus.text = 'Active'
+    dpstatus = ET.SubElement(root,ET.QName(mynsmap['mmd'],'dataset_production_status'))
+    if len(ds_status) > 1:
+        dpstatus.text = 'Not available'
+    else:
+        dpstatus.text = ds_status[0]
+
+    for i in all_collections:
+        myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'collection'))
+        myel.text = i
+
+    myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'last_metadata_update'))
+    myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'update'))
+    ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'datetime')).text = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+    ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'type')).text = 'Created'
+    ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'note')).text = 'Manually created from children'
+
+    myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'temporal_extent'))
+    ET.SubElement(myel, ET.QName(mynsmap['mmd'],'start_date')).text = dates['start']
+    if dates['end'] is not None:
+        ET.SubElement(myel, ET.QName(mynsmap['mmd'],'end_date')).text = dates['end']
+
+    if 'Not available' in all_isotopic and len(all_isotopic) > 1:
+        for i in all_isotopic:
+            if i != 'Not available':
+                myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'iso_topic_category'))
+                myel.text = i
+    else:
+        ET.SubElement(root,ET.QName(mynsmap['mmd'],'iso_topic_category')).text = all_isotopic[0]
+
+    # Add all keywords from all vocabularies to the parent file
+    for vocab, keywords in all_keywords.items():
+        if len(keywords) > 0:  # Only add a vocabulary if it has keywords
+            vocab_element = ET.SubElement(root, ET.QName(mynsmap['mmd'], 'keywords'))
+            vocab_element.set('vocabulary', vocab)  # Set the vocabulary attribute
+            for keyword in keywords:
+                kw_element = ET.SubElement(vocab_element, ET.QName(mynsmap['mmd'], 'keyword'))
+                kw_element.text = keyword
+
+
+    # geoextent
+    myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'geographic_extent'))
+    myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'rectangle'))
+    myel2.set('srsName','EPSG:4326')
+    myel31 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'north'))
+    myel31.text = str(bbox['north'])
+    myel32 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'south'))
+    myel32.text = str(bbox['south'])
+    myel33 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'east'))
+    myel33.text = str(bbox['east'])
+    myel34 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'west'))
+    myel34.text = str(bbox['west'])
+
+    for p in all_personnel:
+        myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'personnel'))
+        for k,v in p.items():
+            ET.SubElement(myel,ET.QName(k)).text = v
+
+    for pj in all_projects:
+        myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'project'))
+        if pj['{http://www.met.no/schema/mmd}short_name'] is not None:
+            ET.SubElement(myel,ET.QName(mynsmap['mmd'],'short_name')).text = pj['{http://www.met.no/schema/mmd}short_name']
+        else:
+            ET.SubElement(myel,ET.QName(mynsmap['mmd'],'short_name'))
+        ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name')).text = pj['{http://www.met.no/schema/mmd}long_name']
+
+    use_const = ET.SubElement(root,ET.QName(mynsmap['mmd'],'use_constraint'))
+    if len(all_useconstraint) == 1:
+        try:
+            ET.SubElement(use_const,ET.QName(mynsmap['mmd'],'identifier')).text = all_useconstraint[0]['{http://www.met.no/schema/mmd}identifier']
+            ET.SubElement(use_const,ET.QName(mynsmap['mmd'],'resource')).text = all_useconstraint[0]['{http://www.met.no/schema/mmd}resource']
+        except:
+            ET.SubElement(use_const,ET.QName(mynsmap['mmd'],'license_text')).text = all_useconstraint[0]['{http://www.met.no/schema/mmd}license_text']
+
+    if len(all_accessconstraint) == 1:
+        access_constr = ET.SubElement(root,ET.QName(mynsmap['mmd'],'access_constraint'))
+        access_constr.text = all_accessconstraint[0]
+
+    tmpserver = []
+    for relinfo in all_relatedinfo:
+        if relinfo['{http://www.met.no/schema/mmd}type'] == 'Data server landing page':
+            tmpserver.append(relinfo['{http://www.met.no/schema/mmd}resource'])
+    #print(tmpserver)
+    #check if this is a simple parent, i.e. all children are below the same folder
+    if len(tmpserver) > 0:
+        simpleparentstring = '.html?'
+        simpleparent = all(simpleparentstring in dslp for dslp in tmpserver)
+        print("Simple parent? ", simpleparent)
+        if simpleparent is True:
+            samebase = []
+            for dslp in tmpserver:
+                samebase.append(dslp.split('.html?')[0])
+            if len(samebase) > 0 and len(set(samebase)) == 1:
+                dataserver_parent = samebase[0]+'.html'
+                #print(dataserver_parent)
+                myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'related_information'))
+                ET.SubElement(myel,ET.QName(mynsmap['mmd'],'type')).text = relinfo['{http://www.met.no/schema/mmd}type']
+                ET.SubElement(myel,ET.QName(mynsmap['mmd'],'description')).text = relinfo['{http://www.met.no/schema/mmd}description']
+                ET.SubElement(myel,ET.QName(mynsmap['mmd'],'resource')).text = dataserver_parent
+        else:
+            try:
+                parentofparentstring = 'catalog.html'
+                parents = [p.split('/catalog.html')[0] for p in tmpserver if p.endswith(parentofparentstring)]
+                print("Parents found: ", parents)
+                common_path = os.path.commonpath(parents)
+                if len(common_path) > 0:
+                    dataserver_parentofparents = common_path+'/catalog.html'
+                    myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'related_information'))
+                    ET.SubElement(myel,ET.QName(mynsmap['mmd'],'type')).text = relinfo['{http://www.met.no/schema/mmd}type']
+                    ET.SubElement(myel,ET.QName(mynsmap['mmd'],'description')).text = relinfo['{http://www.met.no/schema/mmd}description']
+                    ET.SubElement(myel,ET.QName(mynsmap['mmd'],'resource')).text = dataserver_parentofparents
+            except:
+                print("Could not add data server")
+    else:
+        print("Could not add data server")
+
+    for relinfo in all_relatedinfo:
+        if relinfo['{http://www.met.no/schema/mmd}type'] != 'Dataset landing page' and relinfo['{http://www.met.no/schema/mmd}type'] != 'Data server landing page':
+            myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'related_information'))
+            ET.SubElement(myel,ET.QName(mynsmap['mmd'],'type')).text = relinfo['{http://www.met.no/schema/mmd}type']
+            ET.SubElement(myel,ET.QName(mynsmap['mmd'],'description')).text = relinfo['{http://www.met.no/schema/mmd}description']
+            ET.SubElement(myel,ET.QName(mynsmap['mmd'],'resource')).text = relinfo['{http://www.met.no/schema/mmd}resource']
+
+
+    if 'Not available' in all_activity:
+        all_activity.remove('Not available')
+    if len(all_activity) > 0:
+        for at in all_activity:
+            ET.SubElement(root,ET.QName(mynsmap['mmd'],'activity_type')).text = at
+    else:
+        ET.SubElement(root,ET.QName(mynsmap['mmd'],'activity_type')).text = 'Not available'
+
+    if 'Not available' in op_status:
+        op_status.remove('Not available')
+    opstatus = ET.SubElement(root,ET.QName(mynsmap['mmd'],'operational_status'))
+    if len(op_status) == 1:
+        opstatus.text = op_status[0]
+    else:
+        opstatus.text = 'Not available'
+
+    #add data center
+    if len(all_datacenter) == 1:
+        myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'data_center'))
+        myel1 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'data_center_name'))
+        ET.SubElement(myel1,ET.QName(mynsmap['mmd'],'short_name')).text = all_datacenter[0]['{http://www.met.no/schema/mmd}short_name']
+        ET.SubElement(myel1,ET.QName(mynsmap['mmd'],'long_name')).text = all_datacenter[0]['{http://www.met.no/schema/mmd}long_name']
+        ET.SubElement(myel,ET.QName(mynsmap['mmd'],'data_center_url')).text = all_datacenter[0]['{http://www.met.no/schema/mmd}data_center_url']
+    else:
+        print('More than 1 data center, not adding')
+    et = ET.ElementTree(root)
+
+    #save parent to file
+    if isinstance(path, list):
+        if output is not None and output.endswith('.xml'):
+            print("Saving output: ", output)
+            et.write(output, pretty_print=True)
+        elif output is not None and os.path.isdir(output):
+            print("Saving output: ", output+'/parent.xml')
+            et.write(output+'/parent.xml', pretty_print=True)
+        else:
+            print("Could not write parent file. Make sure to run with -l list.txt -o myparent.xml")
+    elif isinstance(path, str):
+        if output is None:
+            print("Outout not specified. Saving output: ", path+'/parent.xml')
+            et.write(path+'/parent.xml', pretty_print=True)
+        else:
+            if os.path.isdir(output):
+                print("Only output directory specified. Saving output: ", output+'/parent.xml')
+                et.write(output+'/parent.xml', pretty_print=True)
+            elif output.endswith('.xml'):
+                print("Saving output: ", output)
+                et.write(output, pretty_print=True)
+            else:
+                print("Could not write parent file")
+    else:
+        print("Something went wrong writing the parent file")
+
+    return
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    try:
+        args = parse_arguments()
+        print(args)
+        if args.inpath is None and args.inlist is None:
+            print("No input specified")
+            sys.exit()
+        if args.inlist and args.inpath:
+            print("Choose either path to dir or file with list of children")
+            sys.exit()
+
+        if args.inlist and args.output:
+            print('Parsing input list')
+
+            with open(args.inlist, "r") as f:
+                pthorlist = [line.strip() for line in f.readlines()]  # Strip extra spaces and newlines
+                print(pthorlist)
+
+        if args.inlist and args.output is None:
+            print("Specify where to place the parent file with --output")
+            sys.exit()
+        if args.inpath:
+            print('Parsing input path')
+            pthorlist = args.inpath
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    # Process file
+    try:
+        create_parent(pthorlist, args.output)
+        print("================= NOTE =================")
+        print("Remember to add title, abstract, metadata identifier and landing page.")
+        print("========================================")
+        print("Check the correctness of the data server landing page. Or eventually add it.")
+        print("========================================")
+        print("If this will be open ended, remove the end date from the file")
+    except Exception as e:
+        print(e)
+        sys.exit()
+
