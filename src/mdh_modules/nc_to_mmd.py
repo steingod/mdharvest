@@ -424,11 +424,15 @@ class Nc_to_mmd(object):
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = creator_email[emlen-1].strip()
                     else:
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = creator_email[i].strip()
+                else:
+                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = ''
                 if 'creator_institution' in myattrs:
                     if i > inlen-1:
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[inlen-1].strip()
                     else:
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[i].strip()
+                else:
+                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = ''
                 i+=1
         if 'contributor_name' in myattrs:
             # Handle technical contact
@@ -453,56 +457,98 @@ class Nc_to_mmd(object):
                 ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Technical contact'
                 if 'contributor_email' in myattrs:
                     ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = contributor_email[i].strip()
+                else:
+                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = ''
                 if 'contributor_institution' in myattrs:
                     ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = contributor_institution[i].strip()
+                else:
+                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = ''
                 i+=1
         if 'publisher_name' in myattrs:
             # Handle data center personnel
             # Check if element contains a list, if so make sure the same list order is used for macthing elements
             nmlen = inlen = emlen = 0
-            publisher_name = getattr(ncin, 'publisher_name').split(',')
-            nmlen = len(publisher_name)
-            if 'publisher_email' in myattrs:
-                publisher_email = getattr(ncin, 'publisher_email').split(',')
-                emlen = len(publisher_email)
-            if 'publisher_institution' in myattrs:
-                publisher_institution = getattr(ncin, 'publisher_institution').split(',')
-                inlen = len(publisher_institution)
-            # Check if in vars()
-            if ('publisher_email' in vars() and 'publisher_institution' in vars()):
-                if len(publisher_name) != len(publisher_email) or len(publisher_name) != len(publisher_institution):
-                    print('Inconsistency in personnel (publisher) elements, not adding some of these')
-            elif ('publisher_email' in vars()):
-                if len(publisher_name) != len(publisher_email):
-                    print('Inconsistency in personnel (publisher) elements, not adding some of these')
-            # Create the XML
-            i = 0
-            for el in publisher_name:
-                myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'personnel'))
-                ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = el.strip()
-                ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Data center contact'
+            # check for ADC info. They are added separtely for harmonisation.
+            publisher_name_string = getattr(ncin, 'publisher_name')
+            if 'Norwegian Meteorological Institute' not in publisher_name_string and 'Arctic Data Centre' not in publisher_name_string:
+                publisher_name = publisher_name_string.split(',')
+                nmlen = len(publisher_name)
                 if 'publisher_email' in myattrs:
-                    if i > emlen-1:
-                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[emlen-1].strip()
-                    else:
-                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[i].strip()
-
+                    publisher_email = getattr(ncin, 'publisher_email').split(',')
+                    emlen = len(publisher_email)
                 if 'publisher_institution' in myattrs:
-                    if i > inlen-1:
-                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[inlen-1].strip()
+                    publisher_institution = getattr(ncin, 'publisher_institution').split(',')
+                    inlen = len(publisher_institution)
+                # Check if in vars()
+                if ('publisher_email' in vars() and 'publisher_institution' in vars()):
+                    if len(publisher_name) != len(publisher_email) or len(publisher_name) != len(publisher_institution):
+                        print('Inconsistency in personnel (publisher) elements, not adding some of these')
+                elif ('publisher_email' in vars()):
+                    if len(publisher_name) != len(publisher_email):
+                        print('Inconsistency in personnel (publisher) elements, not adding some of these')
+                # Create the XML
+                i = 0
+                for el in publisher_name:
+                    myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'personnel'))
+                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = el.strip()
+                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Data center contact'
+                    if 'publisher_email' in myattrs:
+                        if i > emlen-1:
+                            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[emlen-1].strip()
+                        else:
+                            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[i].strip()
                     else:
-                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[i].strip()
-                i+=1
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = ''
+                    if 'publisher_institution' in myattrs:
+                        if i > inlen-1:
+                            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[inlen-1].strip()
+                        else:
+                            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[i].strip()
+                    else:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = ''
+                    i+=1
+
+    # Add ADC data center contact
+    def add_adc_contact(self, myxmltree, mynsmap):
+        myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'personnel'))
+        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = 'ADC support'
+        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Data center contact'
+        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = 'adc-support@met.no'
+        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = 'Norwegian Meteorological Institute / Arctic Data Centre'
+
+    # Add ADC data centre
+    def add_adc_data_centre(self, myxmltree, mynsmap):
+        myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'data_center'))
+        myel2 = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'data_center_name'))
+        ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = 'NO/MET/ADC'
+        ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = 'Norwegian Meteorological Institute / Arctic Data Centre'
+        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'data_center_url')).text = 'https://adc.met.no/'
 
     # Add data centre
+    # Dedicated harmonisation for dataset published thourgh ADC. ADC documentation suggests the following use of ACDD global attributes:
+    #     :publisher_name = "Norwegian Meteorological Institute/Arctic Data Centre (NO/MET/ADC)" ;
+    #     :publisher_email = "adc-support@met.no" ;
+    #     :publisher_url = "https://adc.met.no/" ;
+    #     :publisher_institution = "Norwegian Meteorological Institute" ;
+    #     :publisher_institution_pid = "https://ror.org/001n36p86" ;
+    # but there can always be some variations of it, so a dedicated function to add ADC realated info is used. This will give the same output
+    # as when using the ../add_adc_datacentre script.
     def add_data_centre(self, myxmltree, mynsmap, ncin, myattrs):
-        myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'data_center'))
-        if 'publisher_institution' in myattrs:
+        publisher_name = getattr(ncin, 'publisher_name')
+        if 'Norwegian Meteorological Institute' in publisher_name and 'Arctic Data Centre' in publisher_name:
+            self.add_adc_data_centre(myxmltree, mynsmap)
+            self.add_adc_contact(myxmltree, mynsmap)
+        else:
+            myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'data_center'))
             myel2 = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'data_center_name'))
-            ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = ''
-            ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = getattr(ncin, 'publisher_institution')
-        if 'publisher_url' in myattrs:
-            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'data_center_url')).text = getattr(ncin, 'publisher_url')
+            if 'publisher_institution' in myattrs:
+                ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = ''
+                ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = getattr(ncin, 'publisher_institution')
+            else:
+                ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = ''
+                ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = ''
+            if 'publisher_url' in myattrs:
+                ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'data_center_url')).text = getattr(ncin, 'publisher_url')
 
     # Assuming either Free or None or a combination of a URL with an identifier included in parantheses.
     #MMD relies on the SPDX approach of licenses with a n identifier and a resource (URL) for the lcense. License_text is supported to handle free text approaches.
