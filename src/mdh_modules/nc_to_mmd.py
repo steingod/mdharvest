@@ -373,40 +373,118 @@ class Nc_to_mmd(object):
         if 'myendtime' in locals():
             ET.SubElement(myel, ET.QName(mynsmap['mmd'],'end_date')).text = myendtime.strftime('%Y-%m-%dT%H:%M:%SZ')
 
+    def check_ror(self, ror):
+        queryror = "https://api.ror.org/v2/organizations/"
+        ror_id = ror.split("ror.org/")[-1]
+        try:
+            with ul.urlopen(queryror+ror_id, timeout=10) as response:
+                ror_info = json.load(response)['names']
+                for n in ror_info:
+                    if n.get('lang') == 'en':
+                        if 'ror_display' in n.get('types'):
+                            instname = n['value']
+            return instname
+        except:
+            print("could not fecth official name from ror", ror)
+            return None
+
+    def add_organisation_pid(self, personnel_institution, personnel_institution_pid, organisation):
+        personnel_institution = personnel_institution.strip()
+        organisation_lookup = self.vocabulary.ControlledVocabulary.Organisation
+        official_orgname = None
+        # if ror is available use it and get the official name
+        if personnel_institution_pid is not None:
+            validipid = re.search('https?://ror.org/.+', personnel_institution_pid)
+            if validipid:
+                official_orgname = self.check_ror(personnel_institution_pid)
+                if official_orgname is not None:
+                    organisation.set('uri', personnel_institution_pid)
+                    organisation.text = official_orgname
+
+        if personnel_institution_pid is None or official_orgname is None:
+            #try from MMD voc
+            #sometimes the institution is presented as long_name (short_name)
+            if '(' in personnel_institution and ')' in personnel_institution:
+                org_short_name = re.search('\(.+\)', personnel_institution)
+                org_long_name = personnel_institution.replace(org_short_name.group(),'').strip()
+            else:
+                org_short_name = None
+                org_long_name = personnel_institution
+            #matching prefLabel
+            if org_long_name in organisation_lookup.keys():
+                ror = organisation_lookup[org_long_name]['exactMatch']
+                if ror:
+                    organisation.set('uri', ror)
+                    organisation.text = org_long_name
+            else:
+                #matching altLabel
+                org = ''.join(k for k, v in organisation_lookup.items() if org_long_name in v['altLabel'])
+                if org != '':
+                    ror = organisation_lookup[org]['exactMatch']
+                    organisation.set('uri', ror)
+                    organisation.text = org
+                else:
+                    #matching hiddenLabel
+                    org = ''.join(k for k, v in organisation_lookup.items() if org_long_name in v['hiddenLabel'])
+                    if org != '':
+                        ror = organisation_lookup[org]['exactMatch']
+                        organisation.set('uri', ror)
+                        organisation.text = org
+
     # Add personnel, quite complex...
     # Creator is related to Principal investigator, contributor to technical contact and metadata author (no way to differentiate) and pubisher to data centre hosting data
     # FIXME add splitting of elements...
     def add_personnel(self, myxmltree, mynsmap, ncin, myattrs):
-        # Not used yet...
-        #myels2check = ['creator_name', 'creator_email', 'creator_url', 'creator_type', 'creator_institution',
-        #        'contributor_name', 'contributor_role',
-        #        'publisher_name', 'publisher_email', 'publisher_url', 'publisher_type', 'publisher_institution',]
+        # Mandatory fields are role (always added), name, email and institution.
+        # relevant personnel attributes example:
+        # _type = "person, person" ;
+        # _name = "First1 Family1, First2 Family2" ;
+        # _email = "first.fam@met.no, first2.fam2@nve.no" ;
+        # _pid = "https://orcid.org/0000-1111-2222-3333, https://orcid.org/0000-1111-2222-4444" ;
+        # _url = "https://orcid.org/0000-1111-2222-3333, https://orcid.org/0000-1111-2222-4444" ;
+        #    (or "https://myorg.no/person1, https://myorg2.no/person2"
+        # _institution = "My Institute1, My Institute2 ;
+        # _institution_pid = "https://ror.org/000abcdef, https://ror.org/111abcdef";
         if 'creator_name' in myattrs:
             # Handle PI information
-
-            # Check if element contains a list, if so make sure the same list order is used for matching elements. IGPAS is treated separately
+            # Check if element contains a list, if so make sure the same list order is used for matching elements.
             tmpvar = getattr(ncin, 'creator_name')
             creator_name = []
+            # handle some special cases containing commas
             if 'Institute of Geophysics, Polish Academy of Sciences' in tmpvar:
                 creator_name.append(tmpvar)
             elif "Jean Rabault, using data from Takehiko Nose" in tmpvar:
                 creator_name.append(tmpvar)
             else:
                 creator_name = tmpvar.split(',')
-            if 'creator_email' in myattrs:
-                creator_email = getattr(ncin, 'creator_email').split(',')
-            if 'creator_institution' in myattrs:
-                tmpvar = getattr(ncin, 'creator_institution')
-                if "Norwegian Meteorological Institute (MET), using data from the University of Tokyo" in tmpvar:
-                    creator_institution = "Norwegian Meteorological Institute"
-                else:
-                    creator_institution = getattr(ncin, 'creator_institution').split(',')
             nmlen = len(creator_name)
             if 'creator_email' in myattrs:
+                creator_email = getattr(ncin, 'creator_email').split(',')
                 emlen = len(creator_email)
+            if 'creator_type' in myattrs:
+                creator_type = getattr(ncin, 'creator_type').split(',')
+                ctlen = len(creator_type)
+            # leave some flexibility for now to find ORCID in creator_url
+            if 'creator_pid' in myattrs or 'creator_url' in myattrs:
+                if 'creator_pid' in myattrs:
+                    creator_pid = getattr(ncin, 'creator_pid').split(',')
+                else:
+                    creator_pid = getattr(ncin, 'creator_url').split(',')
+                cpidlen = len(creator_pid)
             if 'creator_institution' in myattrs:
+                tmpvar = getattr(ncin, 'creator_institution')
+                creator_institution = []
+                if "Norwegian Meteorological Institute (MET), using data from the University of Tokyo" in tmpvar:
+                    creator_institution.append('Norwegian Meteorological Institute')
+                elif "Institute of Geophysics, Polish Academy of Sciences" in tmpvar:
+                    creator_institution.append(tmpvar)
+                else:
+                    creator_institution = getattr(ncin, 'creator_institution').split(',')
                 inlen = len(creator_institution)
-            # Check if in vars()
+            if 'creator_institution_pid' in myattrs:
+                creator_institution_pid = getattr(ncin, 'creator_institution_pid').split(',')
+                inpidlen = len(creator_institution_pid)
+            # Check if in vars() for mandatory elements
             if ('creator_email' in vars() and 'creator_institution' in vars()):
                 if len(creator_name) != len(creator_email) or len(creator_name) != len(creator_institution):
                     print('Inconsistency in personnel (creator) elements, not adding some of these')
@@ -417,8 +495,32 @@ class Nc_to_mmd(object):
             i = 0
             for el in creator_name:
                 myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'personnel'))
-                ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = el.strip()
+                crorgtype = False
+                #add type only if length of creator_name and creator_type is matching
+                if ('creator_type' in myattrs) and nmlen == ctlen:
+                    if 'person' in creator_type[i].strip():
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'type')).text = 'Person'
+                    if 'institution' in creator_type[i].strip():
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'type')).text = 'Organisation'
+                        crorgtype = True
+                creator = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name'))
+                creator.text = el.strip()
                 ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Investigator'
+                validcpid = None
+                #add identifier only if length of creator_name and creator_pid is matching
+                if ('creator_pid' in myattrs or 'creator_url' in myattrs) and nmlen == cpidlen:
+                   # use only if orcid or ror is given
+                   validcpid = re.search('https?://(orcid.org/|ror.org/).+', creator_pid[i])
+                   if validcpid:
+                       if 'orcid.org' in creator_pid[i]:
+                           creator.set('uri', creator_pid[i].strip())
+                       else:
+                           crname = creator_name[i].strip()
+                           crpid = creator_pid[i].strip()
+                           self.add_organisation_pid(crname, crpid, creator)
+                #if there is no creator_pid or url or not valid pid, but creator_type is organisation. Try adding ror
+                if crorgtype is True and validcpid is None:
+                    self.add_organisation_pid(creator_name[i].strip(), None, creator)
                 if 'creator_email' in myattrs:
                     if i > emlen-1:
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = creator_email[emlen-1].strip()
@@ -427,10 +529,21 @@ class Nc_to_mmd(object):
                 else:
                     ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = ''
                 if 'creator_institution' in myattrs:
+                    organisation = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation'))
                     if i > inlen-1:
-                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[inlen-1].strip()
+                        crinst = creator_institution[inlen-1].strip()
+                        if 'creator_institution_pid' in myattrs and inlen == inpidlen:
+                            crinstpid = creator_institution_pid[inlen-1].strip()
+                        else:
+                            crinstpid = None
                     else:
-                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = creator_institution[i].strip()
+                        crinst = creator_institution[i].strip()
+                        if 'creator_institution_pid' in myattrs and inlen == inpidlen:
+                            crinstpid = creator_institution_pid[i].strip()
+                        else:
+                            crinstpid = None
+                    organisation.text = crinst
+                    self.add_organisation_pid(crinst, crinstpid, organisation)
                 else:
                     ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = ''
                 i+=1
@@ -438,10 +551,27 @@ class Nc_to_mmd(object):
             # Handle technical contact
             # Check if element contains a list, if so make sure the same list order is used for macthing elements
             contributor_name = getattr(ncin, 'contributor_name').split(',')
+            contnlen = len(contributor_name)
             if 'contributor_email' in myattrs:
                 contributor_email = getattr(ncin, 'contributor_email').split(',')
+                contemlen = len(contributor_email)
             if 'contributor_institution' in myattrs:
                 contributor_institution = getattr(ncin, 'contributor_institution').split(',')
+                continlen = len(contributor_institution)
+            if 'contributor_institution_pid' in myattrs:
+                contributor_institution_pid = getattr(ncin, 'contributor_institution_pid').split(',')
+                continpidlen = len(contributor_institution_pid)
+            if 'contributor_type' in myattrs:
+                contributor_type = getattr(ncin, 'contributor_type').split(',')
+                conttpyelen = len(contributor_type)
+            if 'contributor_role' in myattrs:
+                contributor_role = getattr(ncin, 'contributor_role').split(',')
+            if 'contributor_pid' in myattrs or 'contributor_url' in myattrs:
+                if 'contributor_pid' in myattrs:
+                    contributor_pid = getattr(ncin, 'contributor_pid').split(',')
+                else:
+                    contributor_pid = getattr(ncin, 'contributor_url').split(',')
+                contpidlen = len(contributor_pid)
             # Check if in vars()
             if ('contributor_email' in vars() and 'contributor_institution' in vars()):
                 if len(contributor_name) != len(contributor_email) or len(contributor_name) != len(contributor_institution):
@@ -453,14 +583,51 @@ class Nc_to_mmd(object):
             i = 0
             for el in contributor_name:
                 myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'personnel'))
-                ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = el.strip()
+                contorgtype = False
+                if 'contributor_type' in myattrs and contnlen == conttpyelen:
+                    if 'person' in contributor_type[i].strip():
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'type')).text = 'Person'
+                    if 'institution' in contributor_type[i].strip():
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'type')).text = 'Organisation'
+                        contorgtype = True
+                contributor = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name'))
+                contributor.text = el.strip()
                 ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Technical contact'
+                validcontpid = None
+                if ('contributor_pid' in myattrs or 'contributor_url' in myattrs) and contnlen == contpidlen:
+                    validcontpid = re.search('https?://(orcid.org/|ror.org/).+', contributor_pid[i])
+                    if validcontpid:
+                        if 'orcid.org' in contributor_pid[i]:
+                            contributor.set('uri', contributor_pid[i].strip())
+                        else:
+                            contname = contributor_name[i].strip()
+                            contpid = contributor_pid[i].strip()
+                            self.add_organisation_pid(contname, contpid, contributor)
+                if contorgtype is True and validcontpid is None:
+                    self.add_organisation_pid(contributor_name[i].strip(), None, contributor)
                 if 'contributor_email' in myattrs:
-                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = contributor_email[i].strip()
+                    if i > contemlen-1:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = contributor_email[cpntemlen-1].strip()
+                    else:
+                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = contributor_email[i].strip()
                 else:
                     ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = ''
                 if 'contributor_institution' in myattrs:
-                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = contributor_institution[i].strip()
+                    organisation = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation'))
+                    if i > continlen-1:
+                        continst = contributor_institution[continlen-1].strip()
+                        if 'contributor_institution_pid' in myattrs and continlen == continpidlen:
+                            continstpid = contributor_institution_pid[continlen-1].strip()
+                        else:
+                            continstpid = None
+                    else:
+                        continst = contributor_institution[i].strip()
+                        if 'contributor_institution_pid' in myattrs and continlen == continpidlen:
+                            continstpid = contributor_institution_pid[i].strip()
+                        else:
+                            continstpid = None
+                    organisation.text = continst
+                    self.add_organisation_pid(continst, continstpid, organisation)
                 else:
                     ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = ''
                 i+=1
@@ -470,15 +637,32 @@ class Nc_to_mmd(object):
             nmlen = inlen = emlen = 0
             # check for ADC info. They are added separtely for harmonisation.
             publisher_name_string = getattr(ncin, 'publisher_name')
-            if 'Norwegian Meteorological Institute' not in publisher_name_string and 'Arctic Data Centre' not in publisher_name_string:
+            if 'Norwegian Meteorological Institute' in publisher_name_string and 'Arctic Data Centre' in publisher_name_string:
+                #The ADC publisher is already added with a dedicated function below
+                pass
+            else:
                 publisher_name = publisher_name_string.split(',')
                 nmlen = len(publisher_name)
+                if 'publisher_pid' in myattrs:
+                    publisher_pid = getattr(ncin, 'publisher_pid').split(',')
+                    pubpidlen = len(publisher_pid)
                 if 'publisher_email' in myattrs:
                     publisher_email = getattr(ncin, 'publisher_email').split(',')
                     emlen = len(publisher_email)
+                if 'publisher_type' in myattrs:
+                    publisher_type = getattr(ncin, 'publisher_type').split(',')
+                    pubtypelen = len(publisher_type)
                 if 'publisher_institution' in myattrs:
-                    publisher_institution = getattr(ncin, 'publisher_institution').split(',')
+                    tmpvar = getattr(ncin, 'publisher_institution')
+                    if "Institute of Geophysics, Polish Academy of Sciences" in tmpvar:
+                        publisher_institution = []
+                        publisher_institution.append(tmpvar)
+                    else:
+                        publisher_institution = getattr(ncin, 'publisher_institution').split(',')
                     inlen = len(publisher_institution)
+                if 'publisher_institution_pid' in myattrs:
+                    publisher_institution_pid = getattr(ncin, 'publisher_institution_pid').split(',')
+                    pubinpidlen = len(publisher_institution_pid)
                 # Check if in vars()
                 if ('publisher_email' in vars() and 'publisher_institution' in vars()):
                     if len(publisher_name) != len(publisher_email) or len(publisher_name) != len(publisher_institution):
@@ -490,8 +674,29 @@ class Nc_to_mmd(object):
                 i = 0
                 for el in publisher_name:
                     myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'personnel'))
-                    ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = el.strip()
+                    #add type only if length of publisher_name and publisher_type is matching
+                    puborgtype = False
+                    if ('publisher_type' in myattrs) and nmlen == pubtypelen:
+                        if 'person' in publisher_type[i].strip():
+                            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'type')).text = 'Person'
+                        if 'institution' in publisher_type[i].strip():
+                            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'type')).text = 'Organisation'
+                            puborgtype = True
+                    publisher = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name'))
+                    publisher.text = el.strip()
                     ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Data center contact'
+                    validpubpid = None
+                    if 'publisher_pid' in myattrs and nmlen == pubpidlen:
+                        validpubpid = re.search('https?://(orcid.org/|ror.org/).+', publisher_pid[i])
+                        if validpubpid:
+                            if 'orcid.org' in publisher_pid[i]:
+                                publisher.set('uri', publisher_pid[i].strip())
+                            else:
+                                pubname = publisher_name[i].strip()
+                                pubpid = publisher_pid[i].strip()
+                                self.add_organisation_pid(pubname, pubpid, publisher)
+                    if puborgtype is True and validpubpid is None:
+                        self.add_organisation_pid(publisher_name[i].strip(), None, publisher)
                     if 'publisher_email' in myattrs:
                         if i > emlen-1:
                             ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = publisher_email[emlen-1].strip()
@@ -500,19 +705,32 @@ class Nc_to_mmd(object):
                     else:
                         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = ''
                     if 'publisher_institution' in myattrs:
+                        organisation = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation'))
                         if i > inlen-1:
-                            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[inlen-1].strip()
+                            pubinst = publisher_institution[inlen-1].strip()
+                            if 'publisher_institution_pid' in myattrs and inlen == pubinpidlen:
+                                pubinstpid = publisher_institution_pid[inlen-1].strip()
+                            else:
+                                pubinstpid = None
                         else:
-                            ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = publisher_institution[i].strip()
+                            pubinst = publisher_institution[i].strip()
+                            if 'publisher_institution_pid' in myattrs and inlen == pubinpidlen:
+                                pubinstpid = publisher_institution_pid[i].strip()
+                            else:
+                                pubinstpid = None
+                        organisation.text = pubinst
+                        self.add_organisation_pid(pubinst, pubinstpid, organisation)
                     else:
-                        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = ''
+                        organisation = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation'))
+                        organisation.text = ''
                     i+=1
 
     # Add ADC data center contact
     def add_adc_contact(self, myxmltree, mynsmap):
         myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'personnel'))
-        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = 'ADC support'
+        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'type')).text = 'Organisation'
         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'role')).text = 'Data center contact'
+        ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'name')).text = 'ADC support'
         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'email')).text = 'adc-support@met.no'
         ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'organisation')).text = 'Norwegian Meteorological Institute / Arctic Data Centre'
 
@@ -526,6 +744,7 @@ class Nc_to_mmd(object):
 
     # Add data centre
     # Dedicated harmonisation for dataset published thourgh ADC. ADC documentation suggests the following use of ACDD global attributes:
+    #     :publisher_type = "institution" ;
     #     :publisher_name = "Norwegian Meteorological Institute/Arctic Data Centre (NO/MET/ADC)" ;
     #     :publisher_email = "adc-support@met.no" ;
     #     :publisher_url = "https://adc.met.no/" ;
@@ -539,14 +758,32 @@ class Nc_to_mmd(object):
             self.add_adc_data_centre(myxmltree, mynsmap)
             self.add_adc_contact(myxmltree, mynsmap)
         else:
+            if 'publisher_type' in myattrs:
+                publisher_type = getattr(ncin, 'publisher_type')
+            else:
+                publisher_type = None
             myel = ET.SubElement(myxmltree, ET.QName(mynsmap['mmd'], 'data_center'))
             myel2 = ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'data_center_name'))
-            if 'publisher_institution' in myattrs:
-                ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = ''
-                ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = getattr(ncin, 'publisher_institution')
+            #ACDD: 'person', 'group', 'institution', or 'position'. We make sure that we use publisher_institution if the type is not institution
+            if publisher_type is not None and 'institution' in publisher_type:
+                publisher_name = getattr(ncin, 'publisher_name')
+                if '(' in publisher_name and ')' in publisher_name:
+                    publisher_short_name = re.search('\(.+\)', publisher_name)
+                    publisher_long_name = publisher_name.replace(publisher_short_name.group(),'').strip()
+                    publisher_short_name = publisher_short_name.group().lstrip('(').rstrip(')')
+                    ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = publisher_short_name
+                    ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = publisher_long_name
+                else:
+                    ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = ''
+                    ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = publisher_name
             else:
-                ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = ''
-                ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = ''
+                # using the publisher_institution for the data_center
+                if 'publisher_institution' in myattrs:
+                    ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = ''
+                    ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = getattr(ncin, 'publisher_institution')
+                else:
+                    ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'short_name')).text = ''
+                    ET.SubElement(myel2, ET.QName(mynsmap['mmd'], 'long_name')).text = ''
             if 'publisher_url' in myattrs:
                 ET.SubElement(myel, ET.QName(mynsmap['mmd'], 'data_center_url')).text = getattr(ncin, 'publisher_url')
 
