@@ -825,6 +825,9 @@ def sosomd2mmd(sosomd):
                                     if 'identifier' in el['affiliation'] and 'ror.org' in el['affiliation']['identifier']:
                                         ror = el['affiliation']['identifier']
                                         myel4.set('uri', ror)
+                        else:
+                            myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                            myel4.text = ''
 
                 # sosomd['creator'] type og name
         else:
@@ -866,6 +869,9 @@ def sosomd2mmd(sosomd):
                                 if 'identifier' in sosomd['creator']['affiliation'] and 'ror.org' in sosomd['creator']['affiliation']['identifier']:
                                     ror = sosomd['creator']['affiliation']['identifier']
                                     myel4.set('uri', ror)
+                    else:
+                        myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                        myel4.text = ''
 
     #test contributors
     if 'contributor' in mykeys:
