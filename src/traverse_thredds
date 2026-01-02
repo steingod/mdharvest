@@ -43,6 +43,6 @@ if __name__ == '__main__':
     try:
         traverse_thredds(args.starturl, args.dstdir, args.depth, mylog, args.force)
     except Exception as e:
-        mylog.error('Something went wrong:', e)
+        mylog.error('Something went wrong: %s', e)
         sys.exit()
     sys.exit()
