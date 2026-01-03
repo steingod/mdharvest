@@ -792,15 +792,43 @@ def sosomd2mmd(sosomd):
                 myel2.text = 'Investigator'
                 myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'name'))
                 myel2.text = el['name']
+                orcid = None
+                ror = None
+                if 'identifier' in el.keys():
+                    if 'orcid.org' in el['identifier']:
+                        orcid = el['identifier'].strip()
+                        myel2.set('uri', orcid)
+                    if 'ror.org' in el['identifier']:
+                        ror = el['identifier'].strip()
+                        myel2.set('uri', ror)
                 if 'email' in el.keys():
                     myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
                     myel3.text = el['email']
                 else:
                     myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
                     myel3.text = ''
-                if '@type' in el.keys() and el['@type'] == 'Organization':
-                    myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
-                    myel4.text = el['name']
+                if '@type' in el.keys():
+                    if el['@type'] == 'Organization':
+                        ET.SubElement(myel,ET.QName(ns_map['mmd'],'type')).text = 'Organisation'
+                        myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                        myel4.text = el['name']
+                        if ror is not None:
+                            myel4.set('uri', ror)
+                    else:
+                        ET.SubElement(myel,ET.QName(ns_map['mmd'],'type')).text = 'Person'
+                        if 'affiliation' in el.keys():
+                            if isinstance(el['affiliation'],dict):
+                                if '@type' in el['affiliation'] and el['affiliation']['@type'] == 'Organization':
+                                    if 'name' in el['affiliation']:
+                                        myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                                        myel4.text = el['affiliation']['name']
+                                    if 'identifier' in el['affiliation'] and 'ror.org' in el['affiliation']['identifier']:
+                                        ror = el['affiliation']['identifier']
+                                        myel4.set('uri', ror)
+                        else:
+                            myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                            myel4.text = ''
+
                 # sosomd['creator'] type og name
         else:
             myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'personnel'))
@@ -808,15 +836,42 @@ def sosomd2mmd(sosomd):
             myel2.text = 'Investigator'
             myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'name'))
             myel2.text = sosomd['creator']['name']
+            orcid = None
+            ror = None
+            if 'identifier' in sosomd['creator'].keys():
+                if 'orcid.org' in sosomd['creator']['identifier']:
+                    orcid = sosomd['creator']['identifier'].strip()
+                    myel2.set('uri', orcid)
+                if 'ror.org' in sosomd['creator']['identifier']:
+                    ror = sosomd['creator']['identifier'].strip()
+                    myel2.set('uri', ror)
             if 'email' in sosomd['creator'].keys():
                 myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
                 myel3.text = sosomd['creator']['email']
             else:
                 myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
                 myel3.text = ''
-            if '@type' in sosomd['creator'].keys() and sosomd['creator']['@type'] == 'Organization':
-                myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
-                myel4.text = sosomd['creator']['name']
+            if '@type' in sosomd['creator'].keys():
+                if sosomd['creator']['@type'] == 'Organization':
+                    ET.SubElement(myel,ET.QName(ns_map['mmd'],'type')).text = 'Organisation'
+                    myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                    myel4.text = sosomd['creator']['name']
+                    if ror is not None:
+                        myel4.set('uri', ror)
+                else:
+                    ET.SubElement(myel,ET.QName(ns_map['mmd'],'type')).text = 'Person'
+                    if 'affiliation' in sosomd['creator'].keys():
+                        if isinstance(sosomd['creator']['affiliation'],dict):
+                            if '@type' in sosomd['creator']['affiliation'] and sosomd['creator']['affiliation']['@type'] == 'Organization':
+                                if 'name' in sosomd['creator']['affiliation']:
+                                    myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                                    myel4.text = sosomd['creator']['affiliation']['name']
+                                if 'identifier' in sosomd['creator']['affiliation'] and 'ror.org' in sosomd['creator']['affiliation']['identifier']:
+                                    ror = sosomd['creator']['affiliation']['identifier']
+                                    myel4.set('uri', ror)
+                    else:
+                        myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                        myel4.text = ''
 
     #test contributors
     if 'contributor' in mykeys:
