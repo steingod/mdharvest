@@ -21,6 +21,7 @@ if __name__ == '__main__':
             ?collection skos:prefLabel "%(collection)s"@en .
             ?collection skos:member ?concept .
             ?concept skos:prefLabel ?concname .
+            FILTER (lang(?concname) = "en") .
             }'''
 
         try:
@@ -39,6 +40,9 @@ if __name__ == '__main__':
                 if collection == 'Use Constraint':
                     licenses = lookup_license(members, vocabno)
                     fullvoc += "".join(collection.split()) + ' = ' + str(licenses) + "\n"
+                elif collection == 'Organisation':
+                    organisation = lookup_organisation(members, vocabno)
+                    fullvoc += "".join(collection.split()) + ' = ' + str(organisation) + "\n"
                 else:
                     fullvoc += "".join(collection.split()) + ' = ' + str(members) + "\n"
 
@@ -98,6 +102,66 @@ if __name__ == '__main__':
 
 
         return license_lookup
+
+    def lookup_organisation(organisation,vocabno):
+
+        organisation_lookup = {}
+
+        prefixes = '''
+            prefix skos:<http://www.w3.org/2004/02/skos/core#>
+            prefix text:<http://jena.apache.org/text#>
+            prefix rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+            prefix owl:<http://www.w3.org/2002/07/owl#>
+            prefix dc:<http://purl.org/dc/terms/>'''
+
+        matching_exactmatch = '''select distinct ?exactMatch FROM <https://vocab.met.no/mmd> WHERE {
+            ?concept skos:prefLabel "%(prefLabel)s"@en .
+            ?concept skos:exactMatch ?exactMatch .
+            FILTER (CONTAINS(STR(?exactMatch), \"ror\"))
+            }'''
+
+        matching_altlabel = '''select distinct ?altLabel FROM <https://vocab.met.no/mmd> WHERE {
+            ?concept skos:prefLabel "%(prefLabel)s"@en .
+            ?concept skos:altLabel ?altLabel .
+            FILTER (lang(?altLabel) = "en") .
+            }'''
+
+        matching_hiddenlabel = '''select distinct ?hiddenLabel FROM <https://vocab.met.no/mmd> WHERE {
+            ?concept skos:prefLabel "%(prefLabel)s"@en .
+            ?concept skos:hiddenLabel ?hiddenLabel .
+            FILTER (lang(?hiddenLabel) = "en") .
+            }'''
+
+        for org in organisation:
+            vocabno.setQuery(prefixes + matching_exactmatch % {'prefLabel': org})
+            vocabno.setReturnFormat(JSON)
+            exactmatch = vocabno.query().convert()
+
+            vocabno.setQuery(prefixes + matching_altlabel % {'prefLabel': org})
+            vocabno.setReturnFormat(JSON)
+            altlabel = vocabno.query().convert()
+
+            vocabno.setQuery(prefixes + matching_hiddenlabel % {'prefLabel': org})
+            vocabno.setReturnFormat(JSON)
+            hiddenlabel = vocabno.query().convert()
+
+
+            orgror = ''
+            for result in exactmatch["results"]["bindings"]:
+                orgror = result['exactMatch']['value']
+
+            orgalt = []
+            for result in altlabel["results"]["bindings"]:
+                orgalt.append(result['altLabel']['value'])
+
+            orghidden = []
+            for result in hiddenlabel["results"]["bindings"]:
+                orghidden.append(result['hiddenLabel']['value'])
+
+            organisation_lookup[org] = {'exactMatch' : orgror, 'altLabel' : orgalt, 'hiddenLabel' : orghidden}
+
+
+        return organisation_lookup
 
     def get_cfnames(vocabno):
         cfnames = {}
@@ -264,7 +328,8 @@ if __name__ == '__main__':
                    'Dataset Production Status',
                    'Related Information Types',
                    'ISO Topic Category',
-                   'Keywords Vocabulary']
+                   'Keywords Vocabulary',
+                   'Organisation']
         if voc == 'mmd':
             get_MMDvocab(collections, vocabno)
         if voc == 'cf':
