@@ -42,6 +42,19 @@ def sanitize_filename(filename):
 
     return sanitized_filename
 
+def clean_hyrax_urls(myurl):
+    """
+    Clean up dataset landing page URLs for HYRAX servers
+    """
+    #tmpurl = re.sub(r'catalog.xml\?dataset=/opendap/hyrax/', '', myurl)
+    tmplist = myurl.split('?')
+    tmpurl = re.sub(r'/catalog.xml', '', tmplist[0])
+    for x in re.sub(r'dataset=', '', tmplist[1]).split('/'):
+        if x not in tmplist[0]:
+            tmpurl = '/'.join([tmpurl,x]) 
+
+    return tmpurl
+
 def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
     """
     Actual traversing of THREDDS catalogues for generation of MMD files.
@@ -71,8 +84,12 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         else:
             mypath = (ds.url.split('?')[-1])
         mypath = mypath.replace('dataset=','')
-        mypath = re.sub('https?://*.*.*/catalog/','',mypath)
-        newdstdir = os.path.join(dstdir,mypath)
+        # Works well for THREDDS, but not HYRAX
+        mypath = re.sub(r'https?://(\S*\.){1,2}\.\S*/catalog/','',mypath)
+        # Handling HYRAX, will not do anything if not a HYRAX server
+        mypath = re.sub(r'https?://(\S*\.){2}','',mypath)
+        mypath = re.sub(r'\S{2}/opendap/','',mypath)
+        #newdstdir = os.path.join(dstdir,mypath) # not needed I think
 
         # Special handling for specific provider (NIVA)
         # FIXME check if needed onwards
@@ -84,7 +101,6 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         else:
             newdstdir = os.path.join(dstdir, mypath)
 
-        #print('>>>',newdstdir)
         # Check if destination directory exist, create if not
         # FIXME Make more robust...
         if not os.path.exists(newdstdir):
@@ -92,7 +108,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         # Check input filename
         infile = ds.opendap_url()
         if not infile:
-            mylog.info("Not a proper filename, skipping parsing...")
+            mylog.info("%s is not a proper filename, skipping parsing...", infile)
             continue
         if not infile.lower().endswith(('.nc','.nc4','.ncml')):
             mylog.info('No NCML or NetCDF file, skipping parsing...')
@@ -241,16 +257,7 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         #myroot.insert(4, mynode)
 
         # Add and update last_metdata_update
-        # Removed for now since covered by nc_to_mmd
-##        mynode = ET.Element("{http://www.met.no/schema/mmd}last_metadata_update")
-##        mychild = ET.SubElement(mynode,"{http://www.met.no/schema/mmd}update")
-##        mygchild1 = ET.SubElement(mychild,"{http://www.met.no/schema/mmd}datetime")
-##        mygchild1.text = datetime.now(tz=pytz.UTC).strftime('%Y-%m-%dT%H:%M:%S%Z')
-##        mygchild2 = ET.SubElement(mychild,"{http://www.met.no/schema/mmd}type")
-##        mygchild2.text = 'Created'
-##        mygchild3 = ET.SubElement(mychild,"{http://www.met.no/schema/mmd}note")
-##        mygchild3.text = 'Created automatically from traversing THREDDS server'
-##        myroot.insert(5,mynode)
+        # Covered by nc_to_mmd
 
         # Add collection after ds production status
         dsstatus = myxml.find("./mmd:dataset_production_status",namespaces=myroot.nsmap)
@@ -265,7 +272,6 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
             mynodeadc = ET.Element("{http://www.met.no/schema/mmd}collection")
             mynodeadc.text = 'ADC'
             dsstatus.addnext(mynodeadc)
-
 
         # Check and potentially modify activity_type
         mynode = myxml.find("./mmd:activity_type",namespaces=myroot.nsmap)
@@ -311,7 +317,13 @@ def traverse_thredds(mystart, dstdir, mydepth, mylog, force_mmd=None):
         related_information_description.text = 'Access to the data server landing page'
         related_information_resource = ET.SubElement(related_information,
                 '{http://www.met.no/schema/mmd}resource')
-        related_information_resource.text = ds.url.replace('.xml','.html')
+        if "thredds" in ds.url:
+            # Works in THREDDS servers
+            related_information_resource.text = ds.url.replace('.xml','.html')
+        elif "opendap" in ds.url:
+            # Works on HYRAX servers
+            tmpurl = clean_hyrax_urls(ds.url)
+            related_information_resource.text = '.'.join([tmpurl,'html'])
         myroot.insert(-1,related_information)
 
         # Add data_access (not done automatically)
