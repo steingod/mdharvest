@@ -38,45 +38,45 @@ import datetime as dt
 import gc
 import re
 
-#def extract_metadata(url, delayedloading):
-#    """
-#    Extract metadata from webpage. Using requests_html since NSF ADC is using Javascript to render pages...
-#    """
-#
-#    # Use requests_html
-#    #print('>>>>>', url)
-#    s = HTMLSession()
-#    try:
-#        resp = s.get(url)
-#    except Exception as e:
-#        print(resp)
-#        return(None)
-#
-#    # wait is before and sleep is after render is done
-#    # Make this configurable depending on source
-#    waitingtime = 0
-#    sleeptime = 0
-#    if delayedloading:
-#        print('Prepared for NSF ADC scraping with delayed loading of pages.')
-#        waitingtime = 15
-#        sleeptime = 10
-#
-#    resp.html.render(wait=waitingtime, sleep=sleeptime)
-#    #print(resp.html.render(wait=15, sleep=3))
-#
-#    # Extract information from HTML
-#    metadata = extruct.extract(resp.html.html, base_url=url)
-#    #metadata_box = extruct.extract("https://data.g-e-m.dk/Datasets?doi=10.17897/KBN7-WP73")
-#    del resp
-#
-#    #print(metadata)
-#    if len(metadata['json-ld']) == 0 or 'Dataset' not in metadata['json-ld'][0]['@type']:
-#        raise TypeError('No valid SOSO JSON-LD available')
-#
-#    s.close()
-#    del s
-#    # Beware, this may fail if invalid soso
-#    return metadata['json-ld'][0]
+def extract_metadata(url, delayedloading):
+    """
+    Extract metadata from webpage. Using requests_html since NSF ADC is using Javascript to render pages...
+    """
+
+    # Use requests_html
+    #print('>>>>>', url)
+    s = HTMLSession()
+    try:
+        resp = s.get(url)
+    except Exception as e:
+        print(resp)
+        return(None)
+
+    # wait is before and sleep is after render is done
+    # Make this configurable depending on source
+    waitingtime = 0
+    sleeptime = 0
+    if delayedloading:
+        print('Prepared for NSF ADC scraping with delayed loading of pages.')
+        waitingtime = 15
+        sleeptime = 10
+
+    resp.html.render(wait=waitingtime, sleep=sleeptime)
+    #print(resp.html.render(wait=15, sleep=3))
+
+    # Extract information from HTML
+    metadata = extruct.extract(resp.html.html, base_url=url)
+    #metadata_box = extruct.extract("https://data.g-e-m.dk/Datasets?doi=10.17897/KBN7-WP73")
+    del resp
+
+    #print(metadata)
+    if len(metadata['json-ld']) == 0 or 'Dataset' not in metadata['json-ld'][0]['@type']:
+        raise TypeError('No valid SOSO JSON-LD available')
+
+    s.close()
+    del s
+    # Beware, this may fail if invalid soso
+    return metadata['json-ld'][0]
 
 def check_directories(mydir):
     if not os.path.isdir(mydir):
@@ -113,6 +113,26 @@ def pangaeaapicall(url):
         return(None)
 
     return metadata
+
+def niozschemaextract(mybatch):
+    """
+    Designed for NIOZ. They embed all metadata as JSON in the main landing page https://npdc.nl/dataset.
+    All datasets are found from the sitemap by adding .json to the dataset/<uuid>
+    """
+    #print(mybatch)
+    for el in mybatch:
+        print(el)
+        if 'dataset' not in el:
+            print('Skipping this url...')
+            continue
+        print('>>>> ',el)
+        print(''.join([el,'.json']))
+        mypage = requests.get(''.join([el,'.json']))
+        if mypage.status_code != 200:
+            print('Something went wrong accessing the file over internet...')
+        print(mypage.json())
+
+    return 
 
 def ccadiapicall(url, dstdir):
     """
@@ -164,6 +184,7 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
         toharvest = today - timedelta(days=int(lastmodday))
 
     # Read sitemap or sitemapindex
+    print('Reading sitemap or similar...')
     mypage = requests.get(url)
     sitefile = mypage.content
     mysoup = bs(sitefile, features="lxml")
@@ -184,6 +205,7 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
                 news += [i.text for i in mysoup.find_all('loc')]
             print(len(news))
     elif 'https://api.g-e-m.dk/api/dataset/harvest' in url:
+        print('This is the GEM API...')
         #for gem there is no loc, but directly the list of scripts. Does not support lastmod
         news = [ json.loads(x.string) for x in mysoup.find_all("script", type="application/ld+json")]
     else:
@@ -206,10 +228,10 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
     del mysoup
 
     batchsize = 50
-    print('Number of items to be parsed', len(news))
+    print('Number of items to be parsed:', len(news))
     for i in range(0, len(news), batchsize):
         batch = news[i:i+batchsize]
-        print('batch', i, i+batchsize)
+        print('Parsing batch of records:', i, i+batchsize)
         for el in batch:
             #for non gem we have the url from sitemap
             if isinstance(el,str):
@@ -224,6 +246,8 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
                 try:
                     if 'doi.pangaea.de' in url2read:
                         sosomd = pangaeaapicall(url2read)
+                    elif 'npdc.nl' in url2read:
+                        sosomd = niozschemaextract(batch)
                     else:
                         #sosomd = extract_metadata(url2read, delayedloading)
                         print('Skip for now')
