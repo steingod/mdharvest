@@ -46,6 +46,7 @@ import yaml
 import datetime
 from dateutil.parser import parse
 import logging
+import vocab.ResearchInfra
 from logging.handlers import TimedRotatingFileHandler
 from mdh_modules.harvest_metadata import initialise_logger
 
@@ -66,6 +67,7 @@ def parse_arguments():
     parser.add_argument("-m","--nysmac",help="Checks bounding box for NySMAC.", action='store_true')
     parser.add_argument("-t","--tone",help="Checks bounding box for TONE.", action='store_true')
     parser.add_argument('-r','--sources',dest='sources',help='Comma separated list of sources (in config) to harvest',required=False)
+    parser.add_argument('-e','--enrich',dest='enrich',help='enrich MMD based on yml file',required=False)
 
     # Options a, g, i, n and s cannot be used simultaneously
 
@@ -79,7 +81,7 @@ def parse_arguments():
 
 class LocalCheckMMD():
     def __init__(self, logname, section, mmd_file, bounding, parameters, mycollection,
-            project):
+            project, enrich, rivocab):
         self.logger = logging.getLogger('.'.join([logname,'LocalCheckMMD']))
         self.logger.info('Creating an instance of LocalCheckMMD')
         self.section = section
@@ -88,6 +90,8 @@ class LocalCheckMMD():
         self.params = parameters
         self.coll = mycollection
         self.project = project
+        self.enrich = enrich
+        self.vocab = rivocab
 
     def check_project(self,elements,root):
         projmatch = False
@@ -121,6 +125,49 @@ class LocalCheckMMD():
             return True
         else:
             return False
+
+    def check_for_enrichment(self,selected,root):
+        if 'collection' in selected.keys():
+            newcollections = [cl.strip() for cl in selected['collection'].split(',')]
+            #check for collections
+            if newcollections:
+                mynode = root.find("./mmd:collection",namespaces=root.nsmap)
+                if mynode == None:
+                    for ncl in newcollections:
+                        mynewnode = ET.Element("{http://www.met.no/schema/mmd}collection")
+                        mynewnode.text = ncl
+                        mynode.addprevious(mynewnode)
+                else:
+                    mynodes = root.findall("./mmd:collection",namespaces=root.nsmap)
+                    oldcollections = []
+                    for cl in mynodes:
+                        oldcollections.append(cl.text)
+                    collections_toadd = list(set(newcollections) - set(oldcollections))
+                    for ncl in collections_toadd:
+                        mynewnode = ET.Element("{http://www.met.no/schema/mmd}collection")
+                        mynewnode.text = ncl
+                        mynode.addprevious(mynewnode)
+        if 'polarin_ri' in selected.keys():
+            newris = [cl.strip() for cl in selected['polarin_ri'].split(',')]
+            if newris:
+                #check if already there
+                mynodes = root.findall("./mmd:related_information[mmd:type = 'Observation facility']/mmd:description",namespaces=root.nsmap)
+                oldris = []
+                for ri in mynodes:
+                    oldris.append(ri.text)
+                ri_toadd = list(set(newris) - set(oldris))
+                rimapping = self.vocab
+                for newri in ri_toadd:
+                    if newri in rimapping.keys():
+                        ri = ET.Element("{http://www.met.no/schema/mmd}related_information")
+                        ri2 = ET.SubElement(ri,'{http://www.met.no/schema/mmd}type')
+                        ri2.text = 'Observation facility'
+                        ri3 = ET.SubElement(ri,'{http://www.met.no/schema/mmd}description')
+                        ri3.text = newri
+                        ri4 = ET.SubElement(ri,'{http://www.met.no/schema/mmd}resource')
+                        ri4.text = rimapping[newri]['resource']
+                        root.append(ri)
+        return True
 
     def check_bounding_box(self,elements,root):
         print(">>>>>> Now in checking bounding box....")
@@ -347,11 +394,20 @@ class LocalCheckMMD():
             for el in project_elements:
                 if el.text == None:
                     setInactive = True
+        if self.enrich and not setInactive:
+            identifier = tree.find('mmd:metadata_identifier', namespaces=mynsmap).text
         # Check information found
         # some check of elements content...
 
-
         # Decide on test
+        if self.enrich is not None and not setInactive:
+            for d in self.enrich:
+                if identifier in d['id']:
+                    self.logger.info("identifier in enrichment list: %s", identifier)
+                    if self.check_for_enrichment(d, root):
+                        mymatch = True
+                else:
+                    continue
         if self.bbox and not setInactive:
             if self.check_bounding_box(bbox_elements,root):
                 mymatch = True
@@ -368,18 +424,19 @@ class LocalCheckMMD():
         # Check if the collection is already added, and add if not
         if mymatch:
             for item in tmpcoll:
-                myel = '//mmd:collection[text()="'+item+'"]'
-                myelement = tree.xpath(myel, namespaces=mynsmap)
-                if myelement:
-                    self.logger.warning("Already belongs to %s",item)
-                    #tmpcoll.remove(item)
-                else:
-                    # Add new collections
-                    myelement = tree.find('mmd:collection', namespaces=mynsmap)
-                    if myelement is not None:
-                        mycollection = myelement.getparent()
-                        mycollection.insert(mycollection.index(myelement),
-                                ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>"+item+"</mmd:collection>"""))
+                if item is not None:
+                    myel = '//mmd:collection[text()="'+item+'"]'
+                    myelement = tree.xpath(myel, namespaces=mynsmap)
+                    if myelement:
+                        self.logger.warning("Already belongs to %s",item)
+                        #tmpcoll.remove(item)
+                    else:
+                        # Add new collections
+                        myelement = tree.find('mmd:collection', namespaces=mynsmap)
+                        if myelement is not None:
+                            mycollection = myelement.getparent()
+                            mycollection.insert(mycollection.index(myelement),
+                                    ET.XML("<mmd:collection xmlns:mmd='http://www.met.no/schema/mmd'>"+item+"</mmd:collection>"""))
         #tree = ET.ElementTree(mycollection)
         ET.indent(root, space="  ")
         tree.write(mmd_file, pretty_print=True)
@@ -397,6 +454,13 @@ def main(argv):
 
     if args.sources:
         mysources = args.sources.split(',')
+
+    # read the enrich file
+    if args.enrich:
+        with open(args.enrich, 'r') as ymlfile:
+            fullenrich = yaml.full_load(ymlfile)
+    else:
+        fullenrich = None
 
     # Set up logging
     mylog = initialise_logger(args.logfile, 'filter_mmd_records')
@@ -464,6 +528,7 @@ def main(argv):
 
     # Each section is a data centre to handle
     for section in cfg:
+        filtered = 0
         if args.sources:
             if section not in mysources:
                 continue
@@ -479,15 +544,27 @@ def main(argv):
         # Process files, dump valid filenames to file
         i=1
         s = "/"
+        if fullenrich is not None and section in fullenrich.keys():
+            myenrich = fullenrich[section]
+            expected_updates = len(myenrich)
+        else:
+            myenrich = None
+            expected_updates = 0
+            mylog.info("No dedicated enrichment for: %s", section)
+
         for myfile in myfiles:
             if myfile.endswith(".xml"):
                 mylog.info('Processing file %d, %s', i, myfile)
                 i += 1
-                file2check = LocalCheckMMD('filter_mmd_records', section,s.join((cfg[section]['mmd'],myfile)), bounding, parameters, collection, project)
+                file2check = LocalCheckMMD('filter_mmd_records', section,s.join((cfg[section]['mmd'],myfile)), bounding, parameters, collection, project, myenrich, vocab.ResearchInfra.RI)
                 if file2check.check_mmd():
                     mylog.info("Success")
+                    filtered += 1
                 else:
                     mylog.info("Failure")
+        if fullenrich is not None:
+            mylog.info('Enhancement expected for %s = %s, Enhancement obtained %s', section, expected_updates, filtered)
+
     mylog.info('Processing finished.')
 
 
