@@ -65,6 +65,7 @@ def parse_arguments():
     parser.add_argument("-n","--nmap",help="Checks project affiliation and adds NMAP collection.", action='store_true')
     parser.add_argument("-m","--nysmac",help="Checks bounding box for NySMAC.", action='store_true')
     parser.add_argument("-t","--tone",help="Checks bounding box for TONE.", action='store_true')
+    parser.add_argument("-z","--polarin",help="Checks project affiliation and adds POLARIN collection.", action='store_true')
     parser.add_argument('-r','--sources',dest='sources',help='Comma separated list of sources (in config) to harvest',required=False)
 
     # Options a, g, i, n and s cannot be used simultaneously
@@ -337,7 +338,7 @@ class LocalCheckMMD():
         # Altered formulation to be able to check these three at the same time
         # Check parameters,bounding box and project
         if self.params and not setInactive:
-            params_elements = tree.findall("mmd:keywords[@vocabulary='gcmd']/mmd:keyword", namespaces=mynsmap)
+            params_elements = tree.findall("mmd:keywords[@vocabulary='GCMDSK']/mmd:keyword", namespaces=mynsmap)
         if self.bbox and not setInactive:
             bbox_elements = tree.findall('mmd:geographic_extent/mmd:rectangle', namespaces=mynsmap)
             print(bbox_elements)
@@ -436,6 +437,9 @@ def main(argv):
     elif args.cryoclim:
         project = "CryoClim"
         collection = "CC"
+    elif args.polarin:
+        project = "POLARIN"
+        collection = "POLARIN"
     elif args.nysmac:
         #bounding = [79.11850,10.45540,78.72381,14.06356]   # ORIGINAL
         bounding = [79.11850,14.06356,78.72381,10.45540]    # Reformulated as the order seem to be [N, E, S, W]
@@ -448,7 +452,7 @@ def main(argv):
     # Define collections to add
     if args.collection:
         collection = args.collection.split(',')
-    elif ((not args.sios) and (not args.gcw) and (not args.cryoclim) and (not args.nmap) and (not args.aen) and (not args.infranor) and (not args.tone) and (not args.nysmac)):
+    elif ((not args.sios) and (not args.gcw) and (not args.cryoclim) and (not args.nmap) and (not args.aen) and (not args.infranor) and (not args.tone) and (not args.nysmac) and (not args.polarin)):
         collection = None
 
     # Read config file
