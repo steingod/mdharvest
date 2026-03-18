@@ -114,6 +114,26 @@ def pangaeaapicall(url):
 
     return metadata
 
+def download_metadata_xml(url, dstdir):
+    """
+    Designed for INTERACT. Download DCAT xml into directory
+    """
+    try:
+        filename = url.split('/')[-1]+'.xml'
+        file_path = os.path.join(dstdir, filename)
+        response = requests.get(url+'.xml')
+        if response.status_code == 200:
+            with open(file_path, 'wb') as file:
+                file.write(response.content)
+            print('Successfully downloaded ', filename)
+        else:
+            print('Could not download file ', filename)
+    except requests.exceptions.RequestException as e:
+        print('Error during download: ', e)
+
+    return
+
+
 def niozschemaextract(mybatch):
     """
     Designed for NIOZ. They embed all metadata as JSON in the main landing page https://npdc.nl/dataset.
@@ -233,6 +253,7 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
         batch = news[i:i+batchsize]
         print('Parsing batch of records:', i, i+batchsize)
         for el in batch:
+            sosomd = None
             #for non gem we have the url from sitemap
             if isinstance(el,str):
                 print(el)
@@ -248,6 +269,11 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
                         sosomd = pangaeaapicall(url2read)
                     elif 'npdc.nl' in url2read:
                         sosomd = niozschemaextract(batch)
+                    elif 'dataportal.eu-interact.org/dataset' in url2read:
+                        if '/resource/' not in url2read:
+                            download_metadata_xml(url2read, dstdir)
+                        else:
+                            print("This is just a ckan distribution. Skipping")
                     else:
                         #sosomd = extract_metadata(url2read, delayedloading)
                         print('Skip for now')
@@ -738,7 +764,7 @@ def sosomd2mmd(sosomd):
         if 'name' in sosomd['spatialCoverage']:
             geoname = sosomd['spatialCoverage']['name']
             tmpstation = geoname.split()
-            for st in tmpstation:
+            for st in set(tmpstation):
                 st = st.strip()
                 for k,v in rimapping.items():
                     if st.strip() in v['kw']:
