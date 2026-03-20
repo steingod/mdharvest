@@ -126,6 +126,11 @@ class LocalCheckMMD():
     def check_bounding_box(self,elements,root):
         print(">>>>>> Now in checking bounding box....")
         #print("####",elements)
+        within = False
+        # for NySMAC the within filter should be used instead of intersect
+        if self.coll == 'NySMAC':
+            within = True
+
         if len(elements) > 1:
             self.logger.warning("Found more than one element, not handling this now...")
             return False
@@ -210,44 +215,51 @@ class LocalCheckMMD():
         # South-West corner of bb within reference box: # (S > S_min and W > W_min) and (S < N_max and W < E_max)
         # North-West corner of bb within reference box: # (N < N_max and W > W_min) and (N > S_min and W < E_max)
 
-        if (thisbb[0] < self.bbox[0]) and (thisbb[1] < self.bbox[1]) and (thisbb[0] > self.bbox[2]) and (thisbb[1] > self.bbox[3])\
-            or (thisbb[2] > self.bbox[2]) and (thisbb[1] < self.bbox[1]) and (thisbb[2] < self.bbox[0]) and (thisbb[1] > self.bbox[3])\
-                or (thisbb[2] > self.bbox[2]) and (thisbb[3] > self.bbox[3]) and (thisbb[2] < self.bbox[0]) and (thisbb[3] < self.bbox[1])\
-                    or (thisbb[0] < self.bbox[0]) and (thisbb[3] > self.bbox[3]) and (thisbb[0] > self.bbox[2]) and (thisbb[3] < self.bbox[1]):
-            intercept = True
-            self.logger.info("Interception occurs")
+        if within == False:
+            if (thisbb[0] < self.bbox[0]) and (thisbb[1] < self.bbox[1]) and (thisbb[0] > self.bbox[2]) and (thisbb[1] > self.bbox[3])\
+                or (thisbb[2] > self.bbox[2]) and (thisbb[1] < self.bbox[1]) and (thisbb[2] < self.bbox[0]) and (thisbb[1] > self.bbox[3])\
+                    or (thisbb[2] > self.bbox[2]) and (thisbb[3] > self.bbox[3]) and (thisbb[2] < self.bbox[0]) and (thisbb[3] < self.bbox[1])\
+                        or (thisbb[0] < self.bbox[0]) and (thisbb[3] > self.bbox[3]) and (thisbb[0] > self.bbox[2]) and (thisbb[3] < self.bbox[1]):
+                intercept = True
+                self.logger.info("Interception occurs")
 
 
-        ### thisbb (boundary_box) covers the entire self.bbox (reference).
-        # North side of bb: # N > N_max
-        # East side of bb:  # E > E_max
-        # South side of bb: # S < S_min
-        # West side of bb:  # W < W_min
+            ### thisbb (boundary_box) covers the entire self.bbox (reference).
+            # North side of bb: # N > N_max
+            # East side of bb:  # E > E_max
+            # South side of bb: # S < S_min
+            # West side of bb:  # W < W_min
 
-        elif (thisbb[0] > self.bbox[0]) and (thisbb[1] > self.bbox[1]) and (thisbb[2] < self.bbox[2]) and (thisbb[3] < self.bbox[3]):
-            intercept = True
-            self.logger.info("Interception occurs")
+            elif (thisbb[0] > self.bbox[0]) and (thisbb[1] > self.bbox[1]) and (thisbb[2] < self.bbox[2]) and (thisbb[3] < self.bbox[3]):
+                intercept = True
+                self.logger.info("Interception occurs")
 
 
-        ### thisbb (boundary_box) covers an entire side of self.bbox (reference bbox).
-        # North side of self.bbox covered: # (N > N_max and S < N_max) and (E > E_max and W < W_min)
-        # East side of self.bbox covered:  # (N > N_max and S < S_min) and (E > E_max and W < E_max)
-        # South side of self.bbox covered: # (N > S_min and S < S_min) and (E > E_max and W < W_min)
-        # West side of self.bbox covered:  # (N > N_max and S < S_min) and (E > W_min and W < W_min)
+            ### thisbb (boundary_box) covers an entire side of self.bbox (reference bbox).
+            # North side of self.bbox covered: # (N > N_max and S < N_max) and (E > E_max and W < W_min)
+            # East side of self.bbox covered:  # (N > N_max and S < S_min) and (E > E_max and W < E_max)
+            # South side of self.bbox covered: # (N > S_min and S < S_min) and (E > E_max and W < W_min)
+            # West side of self.bbox covered:  # (N > N_max and S < S_min) and (E > W_min and W < W_min)
 
-        elif (thisbb[0] > self.bbox[0]) and (thisbb[2] < self.bbox[0]) and (thisbb[1] > self.bbox[1]) and (thisbb[3] < self.bbox[3])\
-            or (thisbb[0] > self.bbox[0]) and (thisbb[2] < self.bbox[2]) and (thisbb[1] > self.bbox[1]) and (thisbb[3] < self.bbox[1])\
-                or (thisbb[0] > self.bbox[2]) and (thisbb[3] < self.bbox[3]) and (thisbb[1] > self.bbox[1]) and (thisbb[3] < self.bbox[3])\
-                    or (thisbb[0] > self.bbox[0]) and (thisbb[2] < self.bbox[2]) and (thisbb[1] > self.bbox[3]) and (thisbb[3] < self.bbox[3]):
-            intercept = True
-            self.logger.info("Interception occurs")
+            elif (thisbb[0] > self.bbox[0]) and (thisbb[2] < self.bbox[0]) and (thisbb[1] > self.bbox[1]) and (thisbb[3] < self.bbox[3])\
+                or (thisbb[0] > self.bbox[0]) and (thisbb[2] < self.bbox[2]) and (thisbb[1] > self.bbox[1]) and (thisbb[3] < self.bbox[1])\
+                    or (thisbb[0] > self.bbox[2]) and (thisbb[3] < self.bbox[3]) and (thisbb[1] > self.bbox[1]) and (thisbb[3] < self.bbox[3])\
+                        or (thisbb[0] > self.bbox[0]) and (thisbb[2] < self.bbox[2]) and (thisbb[1] > self.bbox[3]) and (thisbb[3] < self.bbox[3]):
+                intercept = True
+                self.logger.info("Interception occurs")
+        else:
+            print('in within')
+            #For within all corners of the thisbb (boundary_box) must be within the self.bbox (reference bbox).
+            if (thisbb[0] <= self.bbox[0]) and (thisbb[1] <= self.bbox[1]) and (thisbb[2] >= self.bbox[2]) and (thisbb[3] >= self.bbox[3]):
+                intercept = True
+                self.logger.info("Interception occurs")
 
         ### Altered
         if intercept:
             return True
         else:
             return False
-            
+
     def check_mmd(self):
         mymatch = False
         mmd_file = self.mmd_file
