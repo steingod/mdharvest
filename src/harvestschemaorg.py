@@ -803,6 +803,17 @@ def sosomd2mmd(sosomd):
             myel.text = 'SIOS'
             mycoll.addnext(myel)
 
+            #add NySMAC collection within for records within the box. Only if within SIOS to speedup.
+            nysmacbbox = [79.11850,14.06356,78.72381,10.45540]
+            thisbb = [north,east,south,west]
+            nysmac = False
+            if (thisbb[0] <= nysmacbbox[0]) and (thisbb[1] <= nysmacbbox[1]) and (thisbb[2] >= nysmacbbox[2]) and (thisbb[3] >= nysmacbbox[3]):
+                nysmac = True
+            if nysmac:
+                mycoll = myroot.find("mmd:collection",myroot.nsmap)
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+                myel.text = 'NySMAC'
+                mycoll.addnext(myel)
 
     # related_information, assuming primarily landing pages are conveyed
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_information'))
