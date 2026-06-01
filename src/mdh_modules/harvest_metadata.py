@@ -128,6 +128,9 @@ class MetadataHarvester(object):
         if hProtocol == 'OAI-PMH':
             # Could/should be more sophistiated by means of deciding url
             # properties
+            if '?' in baseURL:
+                self.logger.warning('Seems this request is going towards OAI-PMH and a pycsw implementation, rewriting the request')
+                records = records.replace('?','&')
             getRecordsURL = str(baseURL + records)
             self.logger.info("Harvesting metadata from: \n\tURL: %s \n\tprotocol: %s \n", getRecordsURL,hProtocol)
             start_time = datetime.now()
@@ -150,7 +153,6 @@ class MetadataHarvester(object):
                 raise IOError("Server to harvest is not responding properly")
             pageCounter = 1
             resumptionToken = myxml.find('.//{*}resumptionToken')
-            ##print('#### ',type(resumptionToken.text))
             if resumptionToken.text == None or resumptionToken.text == '0':
                 self.logger.info("Nothing more to do")
                 resumptionToken = None
@@ -170,7 +172,12 @@ class MetadataHarvester(object):
                 # Ideally this should be handled more smooth
                 resumptionTokenSpecialTreatment = ['geonetwork', 'eu-interact', 'nilu']
                 #if 'geonetwork' in baseURL:
-                if any(x in baseURL for x in resumptionTokenSpecialTreatment):
+                if '?' in baseURL:
+                    '''
+                    Handling pycsw OAI-PMH at NILU (else NILU will trigger next) newest end point
+                    '''
+                    getRecordsURLLoop = str(getRecordsURL+'&'+resumptionToken)
+                elif any(x in baseURL for x in resumptionTokenSpecialTreatment):
                     getRecordsURLLoop = str(baseURL+'?verb=ListRecords&'+resumptionToken)
                 else:
                     getRecordsURLLoop = str(getRecordsURL+'&'+resumptionToken)
@@ -372,7 +379,9 @@ class MetadataHarvester(object):
             for record in record_elements:
                 # Check header if deleted
                 datestamp = record.find('oai:header/oai:datestamp',
-                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'}).text
+                        namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'})
+                if datestamp != None:
+                    datestamp = datestamp.text
                 oaiid = record.find('oai:header/oai:identifier',
                         namespaces={'oai':'http://www.openarchives.org/OAI/2.0/'}).text
                 delete_status = record.find("oai:header[@status='deleted']",
