@@ -814,6 +814,10 @@ def sosomd2mmd(sosomd):
                 myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
                 myel.text = 'NySMAC'
                 mycoll.addnext(myel)
+    else:
+        print('No spatial extent, skipping record')
+        return(None)
+
 
     # related_information, assuming primarily landing pages are conveyed
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'related_information'))
