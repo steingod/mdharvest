@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # This script is used in the context of ad-hoc enrichment of harvested metadata
 # The script:
 # - parses a csv file with a specific format containing: an observation facility name (from a controlled list),
