@@ -128,6 +128,7 @@ class LocalCheckMMD():
             return False
 
     def check_for_enrichment(self,selected,root):
+        enrichmatch = False
         if 'collection' in selected.keys():
             newcollections = [cl.strip() for cl in selected['collection'].split(',')]
             #check for collections
@@ -148,8 +149,9 @@ class LocalCheckMMD():
                         mynewnode = ET.Element("{http://www.met.no/schema/mmd}collection")
                         mynewnode.text = ncl
                         mynode.addprevious(mynewnode)
-        if 'polarin_ri' in selected.keys():
-            newris = [cl.strip() for cl in selected['polarin_ri'].split(',')]
+                enrichmatch = True
+        if 'obsfacility' in selected.keys():
+            newris = [cl.strip() for cl in selected['obsfacility'].split(',')]
             if newris:
                 #check if already there
                 mynodes = root.findall("./mmd:related_information[mmd:type = 'Observation facility']/mmd:description",namespaces=root.nsmap)
@@ -168,7 +170,11 @@ class LocalCheckMMD():
                         ri4 = ET.SubElement(ri,'{http://www.met.no/schema/mmd}resource')
                         ri4.text = rimapping[newri]['resource']
                         root.append(ri)
-        return True
+                enrichmatch = True
+        if enrichmatch:
+            return True
+        else:
+            return False
 
     def check_bounding_box(self,elements,root):
         print(">>>>>> Now in checking bounding box....")
@@ -411,6 +417,7 @@ class LocalCheckMMD():
             identifier = tree.find('mmd:metadata_identifier', namespaces=mynsmap).text
         # Check information found
         # some check of elements content...
+
 
         # Decide on test
         if self.enrich is not None and not setInactive:
