@@ -18,6 +18,8 @@ from mdh_modules.nc_to_mmd import Nc_to_mmd
 #from mmd_utils import nc_to_mmd
 import lxml.etree as ET
 from datetime import datetime
+import vocab.OSCARvoc
+import vocab.external_vocab_query
 import vocab.ControlledVocabulary
 import vocab.CFGCMD
 import vocab.KEYWORDS

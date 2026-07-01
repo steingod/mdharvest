@@ -20,6 +20,8 @@ from mdh_modules.nc_to_mmd import Nc_to_mmd
 import vocab.ControlledVocabulary
 import vocab.CFGCMD
 import vocab.KEYWORDS
+import vocab.external_vocab_query
+import vocab.OSCARvoc
 import lxml.etree as ET
 import uuid
 import re

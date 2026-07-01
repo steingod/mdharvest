@@ -3,6 +3,8 @@ import argparse
 import sys
 
 from mdh_modules.nc_to_mmd import main
+import vocab.OSCARvoc
+import vocab.external_vocab_query
 import vocab.ControlledVocabulary
 import vocab.CFGCMD
 import vocab.KEYWORDS

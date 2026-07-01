@@ -184,8 +184,8 @@ class Nc_to_mmd(object):
             self.add_project(root, ns_map, ncin)
 
         # Extract platform
-        if 'platform' in global_attributes:
-            self.add_platform(root, ns_map, ncin, global_attributes)
+        if 'platform' in global_attributes or 'instrument' in global_attributes:
+            self.add_platform_instrument(root, ns_map, ncin, global_attributes)
 
         # Extract spatial rep
         if 'spatial_representation' in global_attributes:
@@ -1011,25 +1011,224 @@ class Nc_to_mmd(object):
             myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
             myel2.text = mylongname.strip()
 
-    # Add platform, relies on controlled vocabulary in MMD, will read platform and platform_vocabulary from ACDD if the latter is present and map
-    def add_platform(self, myxmltree, mynsmap, ncin, myattrs):
-        myplatform = getattr(ncin, 'platform')
-        if ',' in myplatform:
-            # Split string in multiple elements
-            myplatform = myplatform.split(',')
-        if isinstance(myplatform, list):
-            myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
-            for el in platform:
-                myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
-                # Not added yet since MMD only relies on satellite data for now.
-                valid_statements = []
-                myel2.text = el
+    # Add platform and/or instrument. The following should be supported:
+    # Oscar-based info: it relies on referencing to Oscar in the vocabulary
+    # platform: "Earth Observation System - Aqua (Aqua)" ;
+    # platform_vocabulary: "WMO OSCAR Space:https://space.oscar.wmo.int/satellites";
+    # instrument: "Moderate-resolution Imaging Spectro-radiometer (MODIS)" ;
+    # instrument_vocabulary: "WMO OSCAR Space:https://space.oscar.wmo.int/instruments";
+    # Only platform or only instrument is also supported.
+    # If platform and instrument are both present, they must have the same length.
+    def add_platform_instrument(self, myxmltree, mynsmap, ncin, myattrs):
+        # make sure to handle commas within double quotes as some satellites might have comma in their long name.
+        if 'platform' in myattrs:
+            tmp_attr = getattr(ncin, 'platform')
+            matches = re.findall(r'(".*?"|[^,]+)', tmp_attr)
+            platforms = [item.strip('"').strip() for item in matches]
         else:
-            myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
-            myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'long_name'))
-            # Not added yet since MMD only relies on satellite data for now.
-            valid_statements = []
-            myel2.text = myplatform
+            platforms = []
+        if 'instrument' in myattrs:
+            tmp_attr = getattr(ncin, 'instrument')
+            matches = re.findall(r'(".*?"|[^,]+)', tmp_attr)
+            instruments = [item.strip('"').strip() for item in matches]
+        else:
+            instruments = []
+
+        # plt and inst have the same structure. Get short_name, long_name and resource for either platform
+        # or instrument and return them.
+        def parse_item(item, vocab_type, vocab_url):
+            parsed_item = {}
+
+            #some oscar names (both short and long) contain parethesis, e.g.
+            #Acronym: SAR-C (Sentinel-1) and Full name: Synthetic Aperture Radar (C-band)
+            #Acronym: SAR-C (RISAT) and Full name: Synthetic Aperture Radar (C-band)
+            # it is not possible to discriminate if the long name is given
+            tmp_name = None
+
+            if '(' in item:
+                #assume shot name in parethesis, but get also the full string
+                long_name = item.split('(')[0].strip()
+                short_name = item.split('(')[1].rstrip(')')
+                tmp_name = item.strip()
+            else:
+                #short name is most common for plt/inst
+                if vocab_type == 'oscar':
+                    long_name = ''
+                    short_name = item.strip()
+                else:
+                    long_name = item.strip()
+                    short_name = ''
+            resource = None
+
+            if vocab_type == 'oscar' and vocab_url:
+                # Oscar vocabs are of type: short_name: {'slug': slug, 'fullname': long_name}, e.g.
+                #'DMSP-F18': {'slug': 'dmsp_f18', 'fullname': 'Defense Meteorological Satellite Program - F18'}
+                #"3MI": {"slug": "3mi", "fullname": "Multi-viewing Multi-channel Multi-polarisation Imager"}
+                #the slug is based on the short_name (acronym) and it is unique and defines the resource URL
+                if 'satellite' in vocab_url:
+                    oscar = self.vocabulary.OSCARvoc.satellites
+                elif 'instrument' in vocab_url:
+                    oscar = self.vocabulary.OSCARvoc.instruments
+
+                #assume short and long are given
+                if tmp_name:
+                    #check that short_name is a valid oscar key (short_name)
+                    #if not check that the full string is a valid entry key (short_name)
+                    #if not check if the full string is a long_name
+                    if short_name in oscar:
+                        long_name = oscar[short_name]['fullname']
+                        resource = vocab_url + oscar[short_name]['slug']
+                    elif tmp_name in oscar:
+                        short_name = tmp_name
+                        long_name = oscar[short_name]['fullname']
+                        resource = vocab_url + oscar[short_name]['slug']
+                    else:
+                        oscar_candidates = []
+                        for key, values in oscar.items():
+                            if values.get("fullname") == tmp_name:
+                                oscar_candidates.append(key)
+                        #exact matching string with parenthesis
+                        if len(oscar_candidates) == 1:
+                            short_name = oscar_candidates[0]
+                            long_name = oscar[oscar_candidates[0]]
+                            resource = vocab_url + oscar[oscar_candidates[0]]['slug']
+                        else:
+                            if platforms:
+                                for candidate in oscar_candidates:
+                                    #guess from platform info
+                                    pltguess = candidate.split('(')[1].rstrip(')')
+                                    if any(pltguess in plt for plt in platforms):
+                                        short_name = candidate
+                                        long_name = oscar[candidate]['fullname']
+                                        resource = vocab_url + oscar[candidate]['slug']
+                else:
+                    # only short name might be provieded for remote sensing satellites.
+                    # it is not possible to discriminate between long and short if only one is provided.
+                    # We check against the cached OSCAR vocabulary
+                    if short_name in oscar:
+                        #the short name was provided. Update info
+                        long_name = oscar[short_name]['fullname']
+                        resource = vocab_url + oscar[short_name]['slug']
+                    else:
+                        #the long_name was maybe provided instead
+                        for key, values in oscar.items():
+                            if values.get("fullname") == short_name:
+                                short_name = key
+                                long_name = oscar[short_name]['fullname']
+                                resource = vocab_url + oscar[short_name]['slug']
+            elif vocab_type in ['C17', 'L22', 'L05']:
+                info = self.vocabulary.external_vocab_query.query_info_fromexternalvocab(
+                    "http://vocab.nerc.ac.uk/sparql/sparql", vocab_type, short_name or long_name)
+                if info:
+                    long_name = info['longname']
+                    short_name = info['shortname']
+                    resource = info['resource']
+            parsed_item = {'short_name':short_name, 'long_name':long_name, 'resource':resource}
+            return parsed_item
+
+        # plt vocab type and vocab url.
+        platform_vocab_type = None
+        platform_vocab_url = None
+        if 'platform_vocabulary' in myattrs:
+            vocab_value = getattr(ncin, 'platform_vocabulary', '')
+            if 'WMO OSCAR Space' in vocab_value or 'oscar' in vocab_value:
+                platform_vocab_type = 'oscar'
+                platform_vocab_url = 'https://space.oscar.wmo.int/satellites/view/'
+            elif 'ICES Platform Codes' in vocab_value or 'vocab.nerc.ac.uk/collection/C17' in vocab_value:
+                platform_vocab_type = 'C17'
+            elif 'GCMD' in vocab_value:
+                platform_vocab_type = 'GCMDPLT'
+
+        # inst vocab type and vocab url.
+        instrument_vocab_type = None
+        instrument_vocab_url = None
+        if 'instrument_vocabulary' in myattrs:
+            vocab_value = getattr(ncin, 'instrument_vocabulary', '')
+            if 'WMO OSCAR Space' in vocab_value or 'oscar' in vocab_value:
+                instrument_vocab_type = 'oscar'
+                instrument_vocab_url = 'https://space.oscar.wmo.int/instruments/view/'
+            elif 'SeaVoX Device Catalogue' in vocab_value or 'vocab.nerc.ac.uk/collection/L22' in vocab_value:
+                instrument_vocab_type = 'L22'
+            elif 'SeaDataNet device categories' in vocab_value or 'vocab.nerc.ac.uk/collection/L05' in vocab_value:
+                instrument_vocab_type = 'L05'
+            elif 'GCMD' in vocab_value:
+                instrument_vocab_type = 'GCMDINST'
+
+        # handle GCMD differently. No parsing needed.
+        if platform_vocab_type == 'GCMDPLT' or instrument_vocab_type == 'GCMDINST':
+            if platforms and platform_vocab_type == 'GCMDPLT':
+                gcmdplt = ET.Element(ET.QName(mynsmap['mmd'], 'keywords'))
+                for p in platforms:
+                    gcmdplt.set('vocabulary', 'GCMDPLT')
+                    ET.SubElement(gcmdplt, ET.QName(mynsmap['mmd'], 'keyword')).text = p.strip()
+                isotopic = myxmltree.findall(ET.QName(mynsmap['mmd'], 'iso_topic_category'))[-1]
+                if isotopic is not None:
+                    isotopic.addnext(gcmdplt)
+            if instruments and instrument_vocab_type == 'GCMDINST':
+                gcmdinst = ET.Element(ET.QName(mynsmap['mmd'], 'keywords'))
+                for i in instruments:
+                    gcmdinst.set('vocabulary', 'GCMDINST')
+                    ET.SubElement(gcmdinst, ET.QName(mynsmap['mmd'], 'keyword')).text = i.strip()
+                isotopic = myxmltree.findall(ET.QName(mynsmap['mmd'], 'iso_topic_category'))[-1]
+                if isotopic is not None:
+                    isotopic.addnext(gcmdinst)
+        else:
+            # If both platforms and instruments are available, their length should match. Only for GCMD the lenght can be different.
+            # If either/or are present, they can be handled separately. This is to fit the MMD structure.
+            if platforms and instruments:
+                if len(platforms) == len(instruments):
+                    for platform, instrument in zip(platforms, instruments):
+                        parsed_platform = parse_item(platform, platform_vocab_type, platform_vocab_url)
+                        parsed_instrument = parse_item(instrument, instrument_vocab_type, instrument_vocab_url)
+
+                        myelp = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
+                        myelp2 = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'short_name'))
+                        myelp2.text = parsed_platform['short_name']
+                        myelp3 = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'long_name'))
+                        myelp3.text = parsed_platform['long_name']
+                        if parsed_platform['resource']:
+                            myelp4 = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'resource'))
+                            myelp4.text = parsed_platform['resource']
+                        myeli = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'instrument'))
+                        myeli2 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'short_name'))
+                        myeli2.text = parsed_instrument['short_name']
+                        myeli3 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'long_name'))
+                        myeli3.text = parsed_instrument['long_name']
+                        if parsed_instrument['resource']:
+                            myeli4 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'resource'))
+                            myeli4.text = parsed_instrument['resource']
+                else:
+                    print('Platform and instrument have different lenght. Cannot group them. Skipping.')
+            elif platforms:
+                #if only platform is provided, make sure they are not repeated.
+                unique_platforms = list(set(platforms))
+                for p in unique_platforms:
+                    parsed_platform = parse_item(p, platform_vocab_type, platform_vocab_url)
+                    myelp = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
+                    myelp2 = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'short_name'))
+                    myelp2.text = parsed_platform['short_name']
+                    myelp3 = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'long_name'))
+                    myelp3.text = parsed_platform['long_name']
+                    if parsed_platform['resource']:
+                        myelp4 = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'resource'))
+                        myelp4.text = parsed_platform['resource']
+            elif instruments:
+                unique_instruments = list(set(instruments))
+                for i in unique_instruments:
+                    parsed_instrument = parse_item(i, instrument_vocab_type, instrument_vocab_url)
+                    myelp = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'platform'))
+                    myelp2 = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'short_name'))
+                    myelp2.text = ''
+                    myelp3 = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'long_name'))
+                    myelp3.text = ''
+                    myeli = ET.SubElement(myelp,ET.QName(mynsmap['mmd'],'instrument'))
+                    myeli2 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'short_name'))
+                    myeli2.text = parsed_instrument['short_name']
+                    myeli3 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'long_name'))
+                    myeli3.text = parsed_instrument['long_name']
+                    if parsed_instrument['resource']:
+                        myeli4 = ET.SubElement(myeli,ET.QName(mynsmap['mmd'],'resource'))
+                        myeli4.text = parsed_instrument['resource']
 
     def add_spatial_representation(self, myxmltree, mynsmap, ncin, myattrs):
         myspatr = getattr(ncin, 'spatial_representation')
