@@ -918,6 +918,9 @@ class Nc_to_mmd(object):
                     elif mykeyw_voc == 'GCMDLOC':
                         mykwgcmdloc = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
                         mykwgcmdloc.set('vocabulary',mykeyw_voc)
+                    elif mykeyw_voc == 'GCMDPROV':
+                        mykwgcmdprov = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
+                        mykwgcmdprov.set('vocabulary',mykeyw_voc)
                     elif mykeyw_voc == 'CFSTDN':
                         mykwcf = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'keywords'))
                         mykwcf.set('vocabulary',mykeyw_voc)
@@ -968,6 +971,8 @@ class Nc_to_mmd(object):
                 ET.SubElement(mykwgcmdsk, ET.QName(mynsmap['mmd'],'keyword')).text = kw
             elif myvoc == 'GCMDLOC':
                 ET.SubElement(mykwgcmdloc, ET.QName(mynsmap['mmd'],'keyword')).text = kw
+            elif myvoc == 'GCMDPROV':
+                ET.SubElement(mykwgcmdprov, ET.QName(mynsmap['mmd'],'keyword')).text = kw
             elif myvoc == 'CFSTDN':
                 ET.SubElement(mykwcf, ET.QName(mynsmap['mmd'],'keyword')).text = kw
             elif myvoc == 'NORTHEMES':

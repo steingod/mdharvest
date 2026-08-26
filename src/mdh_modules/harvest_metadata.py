@@ -167,8 +167,8 @@ class MetadataHarvester(object):
             while resumptionToken != None:
                 self.logger.info("\n\tHandling resumptionToken number: %d", pageCounter)
                 # create resumptionToken URL parameter
-                #resumptionToken = urlencode({'resumptionToken':resumptionToken})
-                resumptionToken = 'resumptionToken='+resumptionToken
+                resumptionToken = urlencode({'resumptionToken':resumptionToken})
+                #resumptionToken = 'resumptionToken='+resumptionToken
                 # Ideally this should be handled more smooth
                 resumptionTokenSpecialTreatment = ['geonetwork', 'eu-interact', 'nilu']
                 #if 'geonetwork' in baseURL:
