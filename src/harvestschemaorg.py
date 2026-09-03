@@ -37,6 +37,7 @@ import json
 import datetime as dt
 import gc
 import re
+from shapely.geometry import Polygon
 
 def extract_metadata(url, delayedloading):
     """
@@ -109,7 +110,7 @@ def pangaeaapicall(url):
         metadata = mypage.json()
         #print(metadata)
     else:
-        print('pangaea metadata_json not reponding')
+        print('endpoint not responding')
         return(None)
 
     return metadata
@@ -133,6 +134,32 @@ def download_metadata_xml(url, dstdir):
 
     return
 
+
+def fieldsitesextract(url):
+    """
+    Designed for SITES data portal.
+
+    """
+    try:
+        mypage = requests.get(url)
+        if mypage.status_code == 200:
+            sitefile = mypage.content
+            mysoup = bs(sitefile, features="lxml")
+            script = mysoup.find("script", type="application/ld+json")
+            metadata = json.loads(script.string)
+        elif mypage.status_code == 429:
+            time.sleep(int(mypage.headers['Retry-After']))
+            mypage = requests.get(url)
+            sitefile = mypage.content
+            mysoup = bs(sitefile, features="lxml")
+            script = mysoup.find("script", type="application/ld+json")
+            metadata = json.loads(script.string)
+        else:
+            print('Could not get', url)
+    except:
+        print('Something went wrong parsing: ', url)
+
+    return metadata
 
 def niozschemaextract(mybatch):
     """
@@ -193,7 +220,7 @@ def ccadiapicall(url, dstdir):
 
     return
 
-def traversesite(url, dstdir, delayedloading, lastmodday):
+def traversesite(url, dstdir, delayedloading, lastmodday, collection):
     """
     Traverse the sitemap and extract information
     Works on NSF ADC not on GEM yet as their sitemap is different
@@ -203,6 +230,12 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
     if lastmodday:
         toharvest = today - timedelta(days=int(lastmodday))
 
+    #validate provided collection
+    collection_lookup = vocab.ControlledVocabulary.CollectionKeywords
+    if collection in collection_lookup:
+        collection = collection
+    else:
+        collection = None
     # Read sitemap or sitemapindex
     print('Reading sitemap or similar...')
     mypage = requests.get(url)
@@ -221,6 +254,7 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
             if lastmodday:
                 print("Parsing only records newer then: ", toharvest)
                 news += [i.text for i in mysoup.find_all('loc') if datetime.strptime(i.find_next_sibling("lastmod").text, "%Y-%m-%d").date() > toharvest]
+                #news += [i.text for i in mysoup.find_all('loc') if (lastmod := i.find_next_sibling("lastmod")) and datetime.strptime(lastmod.text, "%Y-%m-%d").date() > toharvest]
             else:
                 news += [i.text for i in mysoup.find_all('loc')]
             print(len(news))
@@ -232,6 +266,7 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
         if lastmodday:
             print("Parsing only records newer then: ", toharvest)
             news = [i.text for i in mysoup.find_all('loc') if datetime.strptime(i.find_next_sibling("lastmod").text, "%Y-%m-%d").date() > toharvest]
+            #news = [i.text for i in mysoup.find_all('loc') if (lastmod := i.find_next_sibling("lastmod")) and datetime.strptime(lastmod.text, "%Y-%m-%d").date() > toharvest]
             #news = []
             #for i in mysoup.find_all('loc'):
             #    #print(i.find_next_sibling("lastmod"))
@@ -269,6 +304,8 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
                         sosomd = pangaeaapicall(url2read)
                     elif 'npdc.nl' in url2read:
                         sosomd = niozschemaextract(batch)
+                    elif 'meta.fieldsites.se' in url2read:
+                        sosomd = fieldsitesextract(url2read)
                     elif 'dataportal.eu-interact.org/dataset' in url2read:
                         if '/resource/' not in url2read:
                             download_metadata_xml(url2read, dstdir)
@@ -284,7 +321,7 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
                 # for gem we can directly get the schema.org info in the form of dict
                 sosomd = el
             if sosomd != None:
-                mmd = sosomd2mmd(sosomd)
+                mmd = sosomd2mmd(sosomd, collection)
             else:
                 continue
             if mmd == None:
@@ -301,6 +338,8 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
                         if 'eml/knb-lter-arc' in sosomd['identifier']:
                             # Harvesting  will not come here for now
                             tmpname = sosomd['identifier'].split('eml')[-1]
+                        if 'hdl.handle.net/' in sosomd['identifier']:
+                            tmpname = sosomd['identifier'].split('hdl.handle.net/')[-1]
                         else:
                             tmpname = sosomd['identifier'].split('/')[-1]
                     else:
@@ -342,7 +381,7 @@ def traversesite(url, dstdir, delayedloading, lastmodday):
 
     return
 
-def sosomd2mmd(sosomd):
+def sosomd2mmd(sosomd, collection=None):
     """
     Transforming the JSON-LD from schema.org (ESIP's) to MMD format.
     """
@@ -352,8 +391,9 @@ def sosomd2mmd(sosomd):
 
     # Create XML file with namespaces
     ET.register_namespace('mmd',"http://www.met.no/schema/mmd")
-    ns_map = {'mmd': "http://www.met.no/schema/mmd"}
-             # 'gml': "http://www.opengis.net/gml"}
+    # add gml to be able to save polygons
+    ns_map = {'mmd': "http://www.met.no/schema/mmd",
+              'gml': "http://www.opengis.net/gml"}
 
     myroot = ET.Element(ET.QName(ns_map['mmd'], 'mmd'), nsmap=ns_map)
 
@@ -375,7 +415,7 @@ def sosomd2mmd(sosomd):
     # this url is also used as reference from isPartOf.
 
     myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'metadata_identifier'))
-    if 'identifier' in mykeys:
+    if 'identifier' in mykeys and sosomd['identifier'] is not None:
         #print(sosomd['identifier'], type(sosomd['identifier']))
         #it could be a schema:PropertyValue (recommended by SOSO). That would be a dict with: @id, @type, propertyID, value and url.
         if isinstance(sosomd['identifier'], dict):
@@ -384,11 +424,16 @@ def sosomd2mmd(sosomd):
             else:
                 print('Not handled yet')
                 return None
+        elif isinstance(sosomd['identifier'], list):
+            print('Identifier is a list. Not handled yet')
+            return None
         else:
             #or it could be a simple string for text or url.
             #print(sosomd['identifier'], type(sosomd['identifier']))
             if 'doi.org/' in sosomd['identifier']:
                 myel.text = 'doi:' + sosomd['identifier'].split('doi.org/')[-1]
+            elif 'handle.net/' in sosomd['identifier']:
+                myel.text = 'hdl:' + sosomd['identifier'].split('hdl.handle.net/')[-1]
             else:
                 # TODO fix when 'identifier': 'https://pasta.lternet.edu/package/metadata/eml/knb-lter-arc/20033/7'
                 if 'http' in sosomd['identifier'] and 'eml/knb-lter-arc' in sosomd['identifier']:
@@ -644,12 +689,16 @@ def sosomd2mmd(sosomd):
 
         if varmeas:
             if isinstance(sosomd['variableMeasured'],list):
-                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
-                myel.set('vocabulary','None')
+                if myroot.find("mmd:keywords/[@vocabulary = 'None']", myroot.nsmap) is not None:
+                    myel = myroot.find("mmd:keywords/[@vocabulary = 'None']", myroot.nsmap)
+                else:
+                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                    myel.set('vocabulary','None')
+                klist = []
                 for el in sosomd['variableMeasured']:
                     if isinstance(el, dict):
-                        myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                        myelkw.text = el['name']
+                        if el['name'] not in klist:
+                            klist.append(el['name'])
                         if el['name'].upper() in gcwpar:
                             gcwcoll = True
                         #it is possible to extract other vocabularies. Check for CF
@@ -664,11 +713,19 @@ def sosomd2mmd(sosomd):
                         #            if 'vocab.nerc.ac.uk/collection/P07/' in el['subjectOf']['hasDefinedTerm']['url']:
                         #                print('standard name')
                     else:
-                        myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
-                        myelkw.text = el
+                        if el not in klist:
+                            klist.append(el)
                         if el.upper() in gcwpar:
                             gcwcoll = True
+                for k in klist:
+                    myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
+                    myelkw.text = k
             else:
+                if myroot.find("mmd:keywords/[@vocabulary = 'None']", myroot.nsmap) is not None:
+                    myel = myroot.find("mmd:keywords/[@vocabulary = 'None']", myroot.nsmap)
+                else:
+                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'keywords'))
+                    myel.set('vocabulary','None')
                 myelkw = ET.SubElement(myel,ET.QName(ns_map['mmd'],'keyword'))
                 myelkw.text = sosomd['variableMeasured']['name']
                 if sosomd['variableMeasured']['name'].upper() in gcwpar:
@@ -700,84 +757,269 @@ def sosomd2mmd(sosomd):
     #geoshape/box def: A box is the area enclosed by the rectangle formed by two points. The first point is the lower
     #corner, the second point is the upper corner. A box is expressed as two points separated by a space character.
     # south-west-north-east
-    if 'spatialCoverage' in mykeys:
-        geokeys = sosomd['spatialCoverage']['geo'].keys()
-        # FIXME for PDC this reverts lat/lon
-        if 'box' in sosomd['spatialCoverage']['geo']:
-            #NSF/ADC has records with 'box': '-180, 45 180, 90' with "W,S E,N" (instead of "S W N E")
-            if ',' in sosomd['spatialCoverage']['geo']['box']:
-                geobox = sosomd['spatialCoverage']['geo']['box'].replace(',', '').split(' ')
-                tmp = [geobox[1], geobox[0], geobox[3], geobox[2]]
-                geobox = tmp
-            else:
-                geobox = sosomd['spatialCoverage']['geo']['box'].split(' ')
-            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographic_extent'))
-            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
-            # Need to be made more robust
-            if 'additionalProperty' in sosomd['spatialCoverage']:
-                if isinstance(sosomd['spatialCoverage']['additionalProperty'],list):
-                    crs = sosomd['spatialCoverage']['additionalProperty'][0]['value']
-                else:
-                    crs = sosomd['spatialCoverage']['additionalProperty']['value']
-                if 'CRS84' in crs:
-                    myel2.set('srsName','EPSG:4326')
-                else:
-                    myel2.set('srsName','EPSG:4326')
-            else:
-                myel2.set('srsName','EPSG:4326')
+    # simple dict: lat/lon, box or polygon
+    # "spatialCoverage": {"geo":{"@type":"GeoCoordinates","latitude":67.80472222,"longitude":29.28222222}}
+    # "spatialCoverage": {"geo":{"@type":"GeoShape","box":"-54.401117 -37.5679 -54.065333 -36.142567"}}
+    # "spatialCoverage": {"geo":{"@type":"GeoShape","polygon": "68.345332 18.967481 68.348875 18.967481 68.348875 18.98384 68.345332 18.98384 68.345332 18.967481"}
 
-            myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'north'))
-            myel3.text = geobox[2]
-            north = float(myel3.text)
-            myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'south'))
-            myel3.text =  geobox[0]
-            south = float(myel3.text)
-            myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'west'))
-            myel3.text =  geobox[1].rstrip(',')
-            west = float(myel3.text)
-            myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'east'))
-            myel3.text =  geobox[3].rstrip(',')
-            east = float(myel3.text)
+    # list of dict:
+    # "spatialCoverage": [{..,"geo": {"@type": "GeoCoordinates","latitude": 57.177427,"longitude": 14.80762}, "name": "Feresjön, floating platform"},
+    #                     {..,"geo": {"@type": "GeoShape","polygon": "57.182066 ...}, "name": "Feresjön"}]
+    # "spatialCoverage": [{..,"geo": {"@type": "GeoCoordinates", "latitude": 68.353921, "longitude": 18.789888}, "name": "Abisko Scientific Research Station, Mast 4.5m Phenocam 01"},
+    #                     {..,"geo": {"@type": "GeoCoordinates", "latitude": 68.353729, "longitude": 18.816522}, "name": "Abisko Scientific Research Station"}]
+    #
+    # NOT COVER YET: used by seanoe with different coordinate order for box S E N W
+    # dict with one-item list:
+    # "spatialCoverage":{"@type":"Place","geo":[{"@type":"GeoShape","box":"-90 180 90 -180"}]}
+    # dict with lists:
+    # "spatialCoverage": {"geo": [{"@type":"GeoShape","box":"46.293976 -5.077748 46.293977 -5.077749"},
+    #                             {"@type":"GeoShape","box":"46.191084 -4.412852 46.191262 -4.413131"},
+    #                             {"@type":"GeoShape","box":"47.485362 -8.648895 47.485365 -8.648903"}]}
+    # "spatialCoverage": {'geo': [{'@type': 'GeoCoordinates', 'latitude': 46.335244, 'longitude': -1.38658},
+    #                             {'@type': 'GeoCoordinates', 'latitude': 46.058902, 'longitude': -1.16599},
+    #                             {'@type': 'GeoCoordinates', 'latitude': 46.026908, 'longitude': -1.099562},
+    #                             {'@type': 'GeoCoordinates', 'latitude': 45.953185, 'longitude': -1.218234},...
+    if 'spatialCoverage' in mykeys and sosomd['spatialCoverage'] is not None:
+        #simple dict
+        if isinstance(sosomd['spatialCoverage'], dict):
+            geo = sosomd['spatialCoverage'].get('geo')
+            if geo:
+                if isinstance(geo, list):
+                    # we should get the max of all to create the including box probably.
+                    # A list here is likely describing the same spatial location, but in different ways.
+                    print('List of geo is not supported yet')
+                    return None
+
+                geographical_extent = {'north': None, 'south': None, 'east': None, 'west': None}
+                pol_string = None
+                # FIXME for PDC this reverts lat/lon
+                if 'box' in geo:
+                    #NSF/ADC has records with 'box': '-180, 45 180, 90' with "W,S E,N" (instead of "S W N E")
+                    if ',' in geo['box']:
+                        geobox = geo['box'].replace(',', '').split(' ')
+                        tmp = [geobox[1], geobox[0], geobox[3], geobox[2]]
+                        geobox = tmp
+                    else:
+                        geobox = geo['box'].split(' ')
+                    north = float(geobox[2])
+                    south = float(geobox[0])
+                    west = float(geobox[1].rstrip(','))
+                    east = float(geobox[3].rstrip(','))
+                elif 'latitude' in geo and 'longitude' in geo:
+                    north = geo['latitude']
+                    south = geo['latitude']
+                    west = geo['longitude']
+                    east = geo['longitude']
+                elif 'polygon' in geo and geo['polygon'] is not None:
+                    pol_string = geo['polygon']
+                    #create bbox from polygon
+                    coords = list(map(float, pol_string.split()))
+                    poly_coords = [(coords[i], coords[i+1]) for i in range(0, len(coords), 2)]
+                    polygon = Polygon(poly_coords)
+                    #bbox = (minx, miny, maxx, maxy)
+                    bbox = polygon.bounds
+                    north = bbox[3]
+                    south = bbox[1]
+                    west = bbox[0]
+                    east = bbox[2]
+                else:
+                    print('Type of geoinfo not supported. Skipping record.')
+                    return None
+
+                geographical_extent = {'north': north, 'south': south, 'east': east, 'west': west}
+                if all(value is not None for value in geographical_extent.values()):
+                    myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographic_extent'))
+                    myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
+                    myel2.set('srsName','EPSG:4326')
+
+                    myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'north'))
+                    myel3.text = str(geographical_extent['north'])
+                    myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'south'))
+                    myel3.text = str(geographical_extent['south'])
+                    myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'west'))
+                    myel3.text = str(geographical_extent['west'])
+                    myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'east'))
+                    myel3.text = str(geographical_extent['east'])
+                    #adding polygon
+                    if pol_string:
+                        pol = pol_string.split(" ")
+                        myel2pol = ET.SubElement(myel,ET.QName(ns_map['mmd'],'polygon'))
+                        myel3pol = ET.SubElement(myel2pol,ET.QName(ns_map['gml'],'Polygon'))
+                        myel3pol.set('srsName','EPSG:4326')
+                        myel3pol.set('id','polygon')
+                        myel4pol = ET.SubElement(myel3pol,ET.QName(ns_map['gml'],'exterior'))
+                        myel5pol = ET.SubElement(myel4pol,ET.QName(ns_map['gml'],'LinearRing'))
+                        for item1, item2 in zip(pol[::2], pol[1::2]):
+                            myel6pol = ET.SubElement(myel5pol,ET.QName(ns_map['gml'],'pos'))
+                            myel6pol.text = str(item1)+ ' '+str(item2)
+                else:
+                    print('Could not extract geographical extent. Skipping record.')
+                    return None
+
+            else:
+                print('No geoinformation. Skipping record.')
+                return None
+
+            #GEM is providing station names within the spatialCoverage
+            # "spatialCoverage": {"name": "BioBasis Nuuk - Permanent plots",
+            #                     "geo": {"@type": "GeoShape","box": "64.13 -51.38 64.13 -51.38","name": "BioBasis Nuuk - Permanent plots"}
+            if 'name' in sosomd['spatialCoverage']:
+                geoname = sosomd['spatialCoverage']['name']
+                # we need to match the full name, otherwise we might get unwanted matches.
+                tmpstation = geoname.split('-')
+                for st in set(tmpstation):
+                    st = st.strip()
+                    for k,v in rimapping.items():
+                        if st.strip() in v['kw']:
+                            ri = ET.Element(ET.QName(ns_map['mmd'],'related_information'))
+                            ri2 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'type'))
+                            ri2.text = 'Observation facility'
+                            ri3 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'description'))
+                            ri3.text = k
+                            if v['polarin'] is True:
+                                polarincoll = True
+                            ri4 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'resource'))
+                            ri4.text = v['resource']
+                            rilist.append(ri)
         else:
-            # Handle point from PANGEA, could be more thatdoes like this...
-            # FIXME check that no bounding boxes are presented this way
-            if 'latitude' in geokeys and 'longitude' in geokeys:
+            #it could be a list. But it is difficult to know what different elements represent.
+            #the logic for sites seems to be that the first lat/lon is the sampling
+            # several lat/lon
+            # "spatialCoverage": [{..., "geo": {"@type": "GeoCoordinates","latitude": 56.941278,"longitude": 13.64125},"name": "Bolmen, mesocosm"},
+            #                     {..., "geo": {"@type": "GeoCoordinates","latitude": 56.941278,"longitude": 13.64125},"name": "Bolmen AquaNet platform"}]
+            # lat/lon and polygon
+            # "spatialCoverage": [{.., "geo": {"@type": "GeoCoordinates","latitude": 68.331916,"longitude": 19.154204},"name": "Almbergasjön, limnic profile"},
+            #                     {.., "geo": {"@type": "GeoShape", "polygon": "68.331658 19.149355 68.33219 ..."},"name": "Almbergasjön" }],
+            # name can be None
+            # "spatialCoverage": [{..., 'geo': {'@type': 'GeoCoordinates', 'latitude': 64.18201, 'longitude': 19.556576}, 'name': None},
+            #                     {..., 'geo': {'@type': 'GeoShape', 'polygon': '64.166664 19.549721 64.17012 ..."},  'name': 'Degerö (C18)'}]
+            #
+            #Initialize elements.
+            lat = []
+            lon = []
+            pol_string_list = []
+            geographical_extent = {'north': None, 'south': None, 'east': None, 'west': None}
+            geocoordinates = []
+            geoshape = []
+            for sc in sosomd['spatialCoverage']:
+                if 'geo' in sc:
+                    geo = sc['geo']
+                    if geo:
+                        if 'latitude' in geo and 'longitude' in geo:
+                            geocoordinates.append(sc)
+                        elif 'polygon' in geo or 'box' in geo:
+                            geoshape.append(sc)
+                        else:
+                            print('Type of geoinfo not supported. Skipping record.')
+                            return None
+                    else:
+                        print('No geoinformation. Skipping record.')
+                        return None
+                else:
+                    print('No geoinformation. Skipping record.')
+                    return None
+                #fieldsites.se providing station names within the spatialCoverage
+                if sc.get('name'):
+                    geoname = sc['name']
+                    tmpstation = geoname.split(',')
+                    for st in set(tmpstation):
+                        st = st.strip()
+                        for k,v in rimapping.items():
+                            if st.strip() in v['kw']:
+                                ri = ET.Element(ET.QName(ns_map['mmd'],'related_information'))
+                                ri2 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'type'))
+                                ri2.text = 'Observation facility'
+                                ri3 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'description'))
+                                ri3.text = k
+                                if v['polarin'] is True:
+                                    polarincoll = True
+                                ri4 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'resource'))
+                                ri4.text = v['resource']
+                                rilist.append(ri)
+            if geocoordinates:
+                #If there is one lat/lon use that
+                if len(geocoordinates) == 1:
+                    lat.append(geocoordinates[0]['geo']['latitude'])
+                    lon.append(geocoordinates[0]['geo']['longitude'])
+                else:
+                    for gc in geocoordinates:
+                        name = gc.get('name')
+                        if name and ',' in gc['name']:
+                            lat.append(gc['geo']['latitude'])
+                            lon.append(gc['geo']['longitude'])
+                            break
+                        else:
+                            lat.append(gc['geo']['latitude'])
+                            lon.append(gc['geo']['longitude'])
+            elif geoshape:
+                for gs in geoshape:
+                    if isinstance(gs, list):
+                        print('GEO: too many geoinfo')
+                        continue
+                    if 'box' in gs:
+                        geobox = gs['geo']['box'].split(' ')
+                        lat.append(geobox[0])
+                        lat.append(geobox[2])
+                        lon.append(geobox[1])
+                        lon.append(geobox[3])
+                    elif 'polygon' in gs['geo'] and gs['geo']['polygon'] is not None:
+                        #pol = sc['geo']['polygon'].split(" ")
+                        pol_string = gs['geo']['polygon']
+                        pol_string_list.append(pol_string)
+                        coords = list(map(float, pol_string.split()))
+                        poly_coords = [(coords[i], coords[i+1]) for i in range(0, len(coords), 2)]
+                        polygon = Polygon(poly_coords)
+                        #bbox = (minx, miny, maxx, maxy)
+                        bbox = polygon.bounds
+                        lat.append(bbox[3])
+                        lat.append(bbox[1])
+                        lon.append(bbox[0])
+                        lon.append(bbox[2])
+                    else:
+                        print('Type of geoshape not supported. Skipping record.')
+                        return None
+            else:
+                print('Type of geoinfo not supported. Skipping record.')
+                return None
+
+            if lat and lon:
+                north = max(lat)
+                south = min(lat)
+                west = min(lon)
+                east = max(lon)
+            else:
+                print('Could not find geographical info. Skipping record.')
+                return None
+
+            geographical_extent = {'north': north, 'south': south, 'east': east, 'west': west}
+            if all(value is not None for value in geographical_extent.values()):
                 myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'geographic_extent'))
                 myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'rectangle'))
                 myel2.set('srsName','EPSG:4326')
+
                 myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'north'))
-                myel3.text = str(sosomd['spatialCoverage']['geo']['latitude'])
-                north = float(myel3.text)
+                myel3.text = str(geographical_extent['north'])
                 myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'south'))
-                myel3.text =  str(sosomd['spatialCoverage']['geo']['latitude'])
-                south = float(myel3.text)
+                myel3.text = str(geographical_extent['south'])
                 myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'west'))
-                myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
-                west = float(myel3.text)
+                myel3.text = str(geographical_extent['west'])
                 myel3 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'east'))
-                myel3.text =  str(sosomd['spatialCoverage']['geo']['longitude'])
-                east = float(myel3.text)
+                myel3.text = str(geographical_extent['east'])
+                # if only one poligon add it.
+                if len(pol_string_list) == 1:
+                    pol = pol_string_list[0].split(" ")
+                    myel2pol = ET.SubElement(myel,ET.QName(ns_map['mmd'],'polygon'))
+                    myel3pol = ET.SubElement(myel2pol,ET.QName(ns_map['gml'],'Polygon'))
+                    myel3pol.set('srsName','EPSG:4326')
+                    myel3pol.set('id','polygon')
+                    myel4pol = ET.SubElement(myel3pol,ET.QName(ns_map['gml'],'exterior'))
+                    myel5pol = ET.SubElement(myel4pol,ET.QName(ns_map['gml'],'LinearRing'))
+                    for item1, item2 in zip(pol[::2], pol[1::2]):
+                        myel6pol = ET.SubElement(myel5pol,ET.QName(ns_map['gml'],'pos'))
+                        myel6pol.text = str(item1)+ ' '+str(item2)
             else:
-                print('Only supporting bounding boxes for now, skipping record')
-                return(None)
-        #GEM is providing station names within the spatialCoverage
-        if 'name' in sosomd['spatialCoverage']:
-            geoname = sosomd['spatialCoverage']['name']
-            tmpstation = geoname.split()
-            for st in set(tmpstation):
-                st = st.strip()
-                for k,v in rimapping.items():
-                    if st.strip() in v['kw']:
-                        ri = ET.Element(ET.QName(ns_map['mmd'],'related_information'))
-                        ri2 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'type'))
-                        ri2.text = 'Observation facility'
-                        ri3 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'description'))
-                        ri3.text = k
-                        if v['polarin'] is True:
-                            polarincoll = True
-                        ri4 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'resource'))
-                        ri4.text = v['resource']
-                        rilist.append(ri)
+                print('Could not extract geographical extent. Skipping record.')
+                return None
 
         #add SIOS collection
         siosbbox = [90.,40.,70.,-20.]
@@ -816,7 +1058,7 @@ def sosomd2mmd(sosomd):
                 mycoll.addnext(myel)
     else:
         print('No spatial extent, skipping record')
-        return(None)
+        return None
 
 
     # related_information, assuming primarily landing pages are conveyed
@@ -827,25 +1069,6 @@ def sosomd2mmd(sosomd):
     myel2.text = "Dataset landing page"
     myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
     myel2.text = sosomd['url']
-
-    if polarincoll:
-        mycoll = myroot.find("mmd:collection",myroot.nsmap)
-        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
-        myel.text = 'POLARIN'
-        mycoll.addnext(myel)
-
-    if gcwcoll:
-        mycoll = myroot.find("mmd:collection",myroot.nsmap)
-        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
-        myel.text = 'GCW'
-        mycoll.addnext(myel)
-
-    #check if RI is available
-    if len(rilist) > 0:
-        #add Observation facilty
-        lp = myroot.find("mmd:related_information/[mmd:type = 'Dataset landing page']",myroot.nsmap)
-        for rimapped in rilist:
-            lp.addnext(rimapped)
 
     # Get personnel involved
     # FIXME not sure how to differentiate roles
@@ -876,7 +1099,10 @@ def sosomd2mmd(sosomd):
                     if el['@type'] == 'Organization':
                         ET.SubElement(myel,ET.QName(ns_map['mmd'],'type')).text = 'Organisation'
                         myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
-                        myel4.text = el['name']
+                        if 'parentOrganization' in el.keys():
+                            myel4.text = el['parentOrganization']
+                        else:
+                            myel4.text = el['name']
                         if ror is not None:
                             myel4.set('uri', ror)
                     else:
@@ -890,6 +1116,18 @@ def sosomd2mmd(sosomd):
                                     if 'identifier' in el['affiliation'] and 'ror.org' in el['affiliation']['identifier']:
                                         ror = el['affiliation']['identifier']
                                         myel4.set('uri', ror)
+                            elif isinstance(el['affiliation'],list):
+                                #take the first. We do not have multiple org in mmd
+                                if '@type' in el['affiliation'][0] and el['affiliation'][0]['@type'] == 'Organization':
+                                    if 'name' in el['affiliation'][0]:
+                                        myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                                        myel4.text = el['affiliation'][0]['name']
+                                    if 'identifier' in el['affiliation'][0] and 'ror.org' in el['affiliation'][0]['identifier']:
+                                        ror = el['affiliation'][0]['identifier']
+                                        myel4.set('uri', ror)
+                            else:
+                                myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                                myel4.text = ''
                         else:
                             myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
                             myel4.text = ''
@@ -920,7 +1158,10 @@ def sosomd2mmd(sosomd):
                 if sosomd['creator']['@type'] == 'Organization':
                     ET.SubElement(myel,ET.QName(ns_map['mmd'],'type')).text = 'Organisation'
                     myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
-                    myel4.text = sosomd['creator']['name']
+                    if 'parentOrganization' in sosomd['creator'].keys():
+                        myel4.text = sosomd['creator']['parentOrganization']
+                    else:
+                        myel4.text = sosomd['creator']['name']
                     if ror is not None:
                         myel4.set('uri', ror)
                 else:
@@ -934,13 +1175,117 @@ def sosomd2mmd(sosomd):
                                 if 'identifier' in sosomd['creator']['affiliation'] and 'ror.org' in sosomd['creator']['affiliation']['identifier']:
                                     ror = sosomd['creator']['affiliation']['identifier']
                                     myel4.set('uri', ror)
+                        elif isinstance(sosomd['creator']['affiliation'],list):
+                            #take the first. We do not have multiple org in mmd
+                            if '@type' in sosomd['creator']['affiliation'][0] and sosomd['creator']['affiliation'][0]['@type'] == 'Organization':
+                                if 'name' in sosomd['creator']['affiliation'][0]:
+                                    myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                                    myel4.text = sosomd['creator']['affiliation'][0]['name']
+                                if 'identifier' in sosomd['creator']['affiliation'][0] and 'ror.org' in sosomd['creator']['affiliation'][0]['identifier']:
+                                    ror = sosomd['creator']['affiliation'][0]['identifier']
+                                    myel4.set('uri', ror)
+                        else:
+                            myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                            myel4.text = ''
                     else:
                         myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
                         myel4.text = ''
 
     #test contributors
-    if 'contributor' in mykeys:
-        print('some additional personnel')
+    if 'contributor' in mykeys and sosomd['contributor'] is not None:
+        contributors = sosomd['contributor']
+        # always create a list
+        if isinstance(contributors, dict):
+            contributors = [contributors]
+        for contributor in contributors:
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'personnel'))
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'role'))
+            myel2.text = 'Technical contact'
+            myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'name'))
+            myel2.text = contributor['name']
+            orcid = None
+            ror = None
+            if 'identifier' in contributor.keys():
+                if 'orcid.org' in contributor['identifier']:
+                    orcid = contributor['identifier'].strip()
+                    myel2.set('uri', orcid)
+                if 'ror.org' in contributor['identifier']:
+                    ror = contributor['identifier'].strip()
+                    myel2.set('uri', ror)
+            if 'email' in contributor.keys():
+                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
+                myel3.text = contributor['email']
+            else:
+                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'email'))
+                myel3.text = ''
+            if '@type' in contributor.keys():
+                if contributor['@type'] == 'Organization':
+                    ET.SubElement(myel,ET.QName(ns_map['mmd'],'type')).text = 'Organisation'
+                    myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                    if 'parentOrganization' in contributor.keys():
+                        myel4.text = contributor['parentOrganization']
+                    else:
+                        myel4.text = contributor['name']
+                    if ror is not None:
+                        myel4.set('uri', ror)
+                else:
+                    ET.SubElement(myel,ET.QName(ns_map['mmd'],'type')).text = 'Person'
+                    if 'affiliation' in contributor.keys():
+                        if isinstance(contributor['affiliation'],dict):
+                            if '@type' in contributor['affiliation'] and contributor['affiliation']['@type'] == 'Organization':
+                                if 'name' in contributor['affiliation']:
+                                    myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                                    myel4.text = contributor['affiliation']['name']
+                                if 'identifier' in contributor['affiliation'] and 'ror.org' in contributor['affiliation']['identifier']:
+                                    ror = contributor['affiliation']['identifier']
+                                    myel4.set('uri', ror)
+                    else:
+                        myel4 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'organisation'))
+                        myel4.text = ''
+
+    #fieldsites.se providing station names as personnel
+    if 'producer' in mykeys and sosomd['producer'] is not None:
+        producers = sosomd['producer']
+        # always create a list
+        if isinstance(producers, dict):
+            producers = [producers]
+        for producer in producers:
+            if 'name' in producer:
+                tmpstation = producer['name'].strip()
+                for k,v in rimapping.items():
+                    if tmpstation.strip() in v['kw']:
+                        ri = ET.Element(ET.QName(ns_map['mmd'],'related_information'))
+                        ri2 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'type'))
+                        ri2.text = 'Observation facility'
+                        ri3 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'description'))
+                        ri3.text = k
+                        if v['polarin'] is True:
+                            polarincoll = True
+                        ri4 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'resource'))
+                        ri4.text = v['resource']
+                        rilist.append(ri)
+
+    #fieldsites.se providing station names as personnel
+    if 'provider' in mykeys and sosomd['provider'] is not None:
+        providers = sosomd['provider']
+        # always create a list
+        if isinstance(providers, dict):
+            providers = [providers]
+        for provider in providers:
+            if 'name' in provider:
+                tmpstation = provider['name'].strip()
+                for k,v in rimapping.items():
+                    if tmpstation.strip() in v['kw']:
+                        ri = ET.Element(ET.QName(ns_map['mmd'],'related_information'))
+                        ri2 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'type'))
+                        ri2.text = 'Observation facility'
+                        ri3 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'description'))
+                        ri3.text = k
+                        if v['polarin'] is True:
+                            polarincoll = True
+                        ri4 = ET.SubElement(ri,ET.QName(ns_map['mmd'],'resource'))
+                        ri4.text = v['resource']
+                        rilist.append(ri)
 
     # Get data centre
     if 'publisher' in mykeys:
@@ -951,6 +1296,8 @@ def sosomd2mmd(sosomd):
         myel22 = ET.SubElement(myel2,ET.QName(ns_map['mmd'],'long_name'))
         if 'disambiguatingDescription' in sosomd['publisher']:
             myel22.text = sosomd['publisher']['disambiguatingDescription']
+        elif 'legalName' in sosomd['publisher']:
+            myel22.text = sosomd['publisher']['legalName']
         else:
             myel22.text = sosomd['publisher']['name']
         myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'data_center_url'))
@@ -1035,27 +1382,63 @@ def sosomd2mmd(sosomd):
             myel = ET.SubElement(myroot, ET.QName(ns_map['mmd'], 'access_constraint'))
             myel.text = 'Open'
 
+    #add language
+    if 'inLanguage' in mykeys and sosomd['inLanguage'] is not None:
+        language = sosomd['inLanguage']
+        valid_lang = {'en': ['English', 'en', 'eng']}
+        mmdlang = False
+        if isinstance(language, str):
+            if language in valid_lang['en']:
+                mmdlang = True
+        elif isinstance(language, dict):
+            if 'name' in language:
+                if language['name'] in valid_lang['en']:
+                    mmdlang = True
+        else:
+            print("Could not parse language")
+
+        if mmdlang:
+            myel = ET.SubElement(myroot, ET.QName(ns_map['mmd'], 'dataset_language'))
+            myel.text = "en"
+
     # Get data_access information
     if 'distribution' in mykeys:
-        if isinstance(sosomd['distribution'], list):
-            for el in sosomd['distribution']:
-                if el['@type'] == "DataDownload":
-                    #encodingFormat is not always present.
-                    if 'encodingFormat' in el.keys() and (el['encodingFormat'] == "text/tab-separated-values" or el['encodingFormat'] == "application/zip" or el['encodingFormat'] == "text/csv, application/excel"):
-                        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'data_access'))
-                        myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'type'))
-                        myel2.text = 'HTTP'
-                        myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
-                        myel3.text = el['contentUrl']
-                        myel4 = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'storage_information'))
-                        myel5 = ET.SubElement(myel4,ET.QName(ns_map['mmd'],'file_format'))
-                        myel5.text = el['encodingFormat']
-
-        else:
-            print('To be handled later...')
+        distributions = sosomd['distribution']
+        storageinfo = []
+        if isinstance(sosomd['distribution'], dict):
+            distributions = [distributions]
+        for el in distributions:
+            #encodingFormat is not always present.
+            valid_encoding = ['text/tab-separated-values', 'application/zip',
+                              'text/csv, application/excel', 'text/csv', 'text/plain',
+                              'application/x-netcdf']
+            storaged = {}
+            if 'contentUrl' in el.keys() and 'format=html' not in el['contentUrl']:
+                myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'data_access'))
+                myel2 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'type'))
+                myel2.text = 'HTTP'
+                myel3 = ET.SubElement(myel,ET.QName(ns_map['mmd'],'resource'))
+                myel3.text = el['contentUrl']
+                ef = ''
+                size = ''
+                if 'encodingFormat' in el.keys() and el['encodingFormat'] in valid_encoding:
+                    ef = el['encodingFormat']
+                    if 'sha256' in el.keys():
+                        size = el['sha256']
+                storaged = {'url': el['contentUrl'], 'encoding': ef, 'size': size}
+                storageinfo.append(storaged)
+        if len(storageinfo) == 1:
+            if storageinfo[0]['encoding']:
+                myel4 = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'storage_information'))
+                myel5 = ET.SubElement(myel4,ET.QName(ns_map['mmd'],'file_format'))
+                myel5.text = storageinfo[0]['encoding']
+                if storageinfo[0]['size']:
+                    myel6 = ET.SubElement(myel4,ET.QName(ns_map['mmd'],'checksum'))
+                    myel6.set('type', 'sha256sum')
+                    myel6.text = el['sha256']
 
     # Get parent/child information
-    if 'isPartOf' in mykeys:
+    if 'isPartOf' in mykeys and sosomd['isPartOf'] is not None and 'meta.fieldsites.se/collections' not in sosomd['isPartOf']:
         parentavailable = True
         #parse from url. Skip for now, DOIs are not persistent for data under review
         #if 'doi.pangaea.de/' in sosomd['isPartOf']:
@@ -1075,11 +1458,15 @@ def sosomd2mmd(sosomd):
             myel.text = parentid
 
     #data citation DOI
-    if 'identifier' in mykeys:
+    if 'identifier' in mykeys and sosomd['identifier'] is not None:
         if isinstance(sosomd['identifier'],str):
             if 'doi.org' in sosomd['identifier']:
                 myel = ET.SubElement(myroot, ET.QName(ns_map['mmd'], 'dataset_citation'))
                 myel2 = ET.SubElement(myel, ET.QName(ns_map['mmd'], 'doi'))
+                myel2.text = sosomd['identifier']
+            if 'hdl.handle.net' in sosomd['identifier']:
+                myel = ET.SubElement(myroot, ET.QName(ns_map['mmd'], 'dataset_citation'))
+                myel2 = ET.SubElement(myel, ET.QName(ns_map['mmd'], 'url'))
                 myel2.text = sosomd['identifier']
         else:
             if 'url' in sosomd['identifier'] and 'doi.org' in sosomd['identifier']['url']:
@@ -1087,6 +1474,38 @@ def sosomd2mmd(sosomd):
                 myel2 = ET.SubElement(myel, ET.QName(ns_map['mmd'], 'doi'))
                 myel2.text = sosomd['identifier']['url']
 
+    #check if RI is available
+    if len(rilist) > 0:
+        #add Observation facilty
+        lp = myroot.find("mmd:related_information/[mmd:type = 'Dataset landing page']",myroot.nsmap)
+        added = []
+        for rimapped in rilist:
+            dtext = rimapped.find("mmd:description", myroot.nsmap).text
+            if dtext not in added:
+                added.append(dtext)
+                lp.addnext(rimapped)
+
+    if polarincoll:
+        mycoll = myroot.find("mmd:collection",myroot.nsmap)
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+        myel.text = 'POLARIN'
+        mycoll.addnext(myel)
+
+    if gcwcoll:
+        mycoll = myroot.find("mmd:collection",myroot.nsmap)
+        myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+        myel.text = 'GCW'
+        mycoll.addnext(myel)
+
+    #add default collection provided
+    if collection:
+        mycolls = myroot.findall('mmd:collection', myroot.nsmap)
+        collection_found = any(oldc.text == collection for oldc in mycolls)
+        if not collection_found:
+            mycoll = myroot.find('mmd:collection', myroot.nsmap)
+            myel = ET.SubElement(myroot,ET.QName(ns_map['mmd'],'collection'))
+            myel.text = collection
+            mycoll.addnext(myel)
 
     #print(ET.tostring(myroot, pretty_print=True, encoding='unicode'))
     #sys.exit()
@@ -1143,6 +1562,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--ccadi-api', dest='ccadiapi', action='store_true')
     parser.add_argument('-d', '--delayed-loading', dest='delayedloading', action='store_true')
     parser.add_argument('-l', '--last-modified-day', dest="lastmodday", type=str, help="harvest only the modified in the last X day")
+    parser.add_argument('-a', '--collection', dest="collection", type=str, help="collection to be added to all records of one endpoint")
     try:
         args = parser.parse_args()
     except:
@@ -1159,7 +1579,7 @@ if __name__ == '__main__':
             sys.exit()
     else:
         try:
-            traversesite(args.starturl, args.dstdir, args.delayedloading, args.lastmodday)
+            traversesite(args.starturl, args.dstdir, args.delayedloading, args.lastmodday, args.collection)
         except Exception as e:
             print('Something went wrong:', e)
             sys.exit()
