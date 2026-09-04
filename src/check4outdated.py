@@ -34,7 +34,6 @@ NOTES:
     - NA
 
 """
-
 import sys
 import os
 import argparse
@@ -42,7 +41,9 @@ import yaml
 from mdh_modules.harvest_metadata import setInactive, initialise_logger
 import logging
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 from datetime import datetime, timedelta
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -67,6 +68,7 @@ def parse_arguments():
 
     return args
 
+
 def check_files_from_first_of_month(mylog, dir2c):
     """
     Checks that there are files in the raw folder from the exact date of the 1st of the current month.
@@ -87,7 +89,7 @@ def check_files_from_first_of_month(mylog, dir2c):
 
     # Check if any files were found
     if not files_from_first:
-        mylog.error("No files from the 1st of the month found in %s. A full harvest has probably not be done. Aborting cleanup.", dir2c)
+        mylog.error("No files from the 1st of the month found in %s. A full harvest has probably not been done. Aborting cleanup.", dir2c)
         raise RuntimeError(f"No files from the exact date 1st of the month found in {dir2c}. Cleanup aborted.")
 
     mylog.info("Found %d file(s) from the 1st of the month in %s. Proceeding with cleanup.", len(files_from_first), dir2c)
@@ -100,7 +102,7 @@ def loop_directory(mylog, dir2c, dir2m, olderthan, dry_run=False):
     mylog.info("Checking files in %s", dir2c)
 
     # Keep track of all raw files for comparison with mmd files
-    raw_files = set(fn.rstrip('.xml') for fn in os.listdir(dir2c) if fn.endswith('.xml'))
+    raw_files = set(Path(fn).stem for fn in os.listdir(dir2c) if fn.endswith('.xml'))
 
     # Process raw files
     for fn in os.listdir(dir2c):
@@ -109,7 +111,7 @@ def loop_directory(mylog, dir2c, dir2m, olderthan, dry_run=False):
             lastmtime = os.path.getmtime(raw_file_path)
 
             if lastmtime < olderthan:
-                mmdid = fn.rstrip('.xml')
+                mmdid = Path(fn).stem
                 if dry_run:
                     mylog.info("[DRY RUN] mmd file %s would be set as Inactive and raw deleted.", fn)
                 else:
@@ -129,11 +131,11 @@ def loop_directory(mylog, dir2c, dir2m, olderthan, dry_run=False):
                 mylog.debug("File %s is still valid", fn)
 
     # Check mmd files for corresponding raw files.
-    # Due to old cleaning only in the raw folders, mmd files might sill be present and never set to inactive before.
+    # Due to old cleaning only in the raw folders, mmd files might still be present and never set to inactive before.
     mylog.info("Checking mmd folder %s for orphaned files.", dir2m)
     for fn in os.listdir(dir2m):
         if fn.endswith('.xml'):
-            mmdid = fn.rstrip('.xml')
+            mmdid = Path(fn).stem
             if mmdid not in raw_files:
                 if dry_run:
                     mylog.info("[DRY RUN] mmd file %s would be set to Inactive.", fn)
@@ -142,6 +144,7 @@ def loop_directory(mylog, dir2c, dir2m, olderthan, dry_run=False):
                     setInactive(dir2m, mmdid, mylog)
 
     return
+
 
 def main(argv):
     # Parse command line arguments
@@ -206,6 +209,7 @@ def main(argv):
         # Proceed with cleanup
         mylog.info("Looping harvested files in: %s", raw_dir)
         loop_directory(mylog, raw_dir, mmd_dir, olderthan, dry_run=args.dry_run)
+
 
 if __name__ == '__main__':
     main(sys.argv[1:])
