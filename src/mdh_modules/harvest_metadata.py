@@ -153,13 +153,13 @@ class MetadataHarvester(object):
                 raise IOError("Server to harvest is not responding properly")
             pageCounter = 1
             resumptionToken = myxml.find('.//{*}resumptionToken')
-            if resumptionToken.text == None or resumptionToken.text == '0':
+            if resumptionToken == None or resumptionToken.text == None or resumptionToken.text == '0':
                 self.logger.info("Nothing more to do")
                 resumptionToken = None
             else:
                 resumptionToken = resumptionToken.text
+                self.logger.info("Resumption token found: %s",resumptionToken)
 
-            self.logger.info("Resumption token found: %s",resumptionToken)
 
             """
             Manage resumptionToken, i.e. segmentation of results in pages
@@ -198,11 +198,11 @@ class MetadataHarvester(object):
 
                 resumptionToken = myxml.find('.//{*}resumptionToken')
                 if resumptionToken != None:
-                    self.logger.info("Resumption token found: %s",resumptionToken)
                     if resumptionToken.text == '0':
                         resumptionToken = None
                     else:
                         resumptionToken = resumptionToken.text
+                        self.logger.info("Resumption token found: %s",resumptionToken)
 
                 pageCounter += 1
 
