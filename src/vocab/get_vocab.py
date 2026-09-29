@@ -22,6 +22,7 @@ if __name__ == '__main__':
             ?collection skos:member ?concept .
             ?concept skos:prefLabel ?concname .
             FILTER (lang(?concname) = "en") .
+            FILTER NOT EXISTS { ?concept owl:deprecated true . }
             }'''
 
         try:
@@ -322,7 +323,6 @@ if __name__ == '__main__':
                    'Access Constraint',
                    'Activity Type',
                    'Operational Status',
-                   'Access Constraint',
                    'Collection Keywords',
                    'ISO Topic Category',
                    'Dataset Production Status',

@@ -290,10 +290,6 @@ class Nc_to_mmd(object):
                 tmpdatetime = tmpdate.group()+tmptime
         mydatetime = parse(tmpdatetime)
         # Prepare the output
-        if 'date_metadata_modified' in myattrs:
-            myupdate = getattr(ncin, 'date_metadata_modified')
-        else:
-            myupdate = None
         myel = ET.SubElement(myxmltree,ET.QName(mynsmap['mmd'],'last_metadata_update'))
         myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'update'))
         myel3 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'datetime'))
@@ -302,6 +298,18 @@ class Nc_to_mmd(object):
         myel3.text = 'Created'
         myel3 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'note'))
         myel3.text = 'MMD record created from the NetCDF file'
+        if 'date_metadata_modified' in myattrs:
+            myupdate = getattr(ncin, 'date_metadata_modified')
+            myupdate = parse(myupdate)
+            if myupdate:
+                myel2 = ET.SubElement(myel,ET.QName(mynsmap['mmd'],'update'))
+                myel3 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'datetime'))
+                myel3.text = myupdate.strftime("%Y-%m-%dT%H:%M:%SZ")
+                myel3 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'type'))
+                myel3.text = 'Minor modification'
+                myel3 = ET.SubElement(myel2,ET.QName(mynsmap['mmd'],'note'))
+                myel3.text = 'NetCDF file has been modified'
+
 
     # Assuming english as default language
     def add_title(self, myxmltree, mynsmap, ncin):

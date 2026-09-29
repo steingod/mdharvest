@@ -97,7 +97,7 @@ def collection_values(myxml, valid_keywords, all_keywords, all_isotopic, bbox, d
         pp = p.getchildren()
         ppdic = {}
         for el in pp:
-            ppdic[el.tag] = el.text
+            ppdic[el.tag] = {'text': el.text, 'uri': el.attrib['uri'] if 'uri' in el.attrib else None}
         if ppdic not in all_personnel:
             all_personnel.append(ppdic)
 
@@ -298,7 +298,11 @@ def create_parent(path, output=None):
     for p in all_personnel:
         myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'personnel'))
         for k,v in p.items():
-            ET.SubElement(myel,ET.QName(k)).text = v
+            el = ET.SubElement(myel,ET.QName(k))
+            el.text = v['text']
+            if v['uri']:
+                el.set('uri', v['uri'])
+
 
     for pj in all_projects:
         myel = ET.SubElement(root,ET.QName(mynsmap['mmd'],'project'))
