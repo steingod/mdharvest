@@ -166,11 +166,14 @@ class MetadataHarvester(object):
             """
             while resumptionToken != None:
                 self.logger.info("\n\tHandling resumptionToken number: %d", pageCounter)
+                # Encode only if not already encoded as some endpoints encode it themselves
+                if resumptionToken and not any(c in resumptionToken for c in ['%', ';', '?', '=', '&']):
+                    resumptionToken = quote_plus(resumptionToken)
                 # create resumptionToken URL parameter
-                resumptionToken = urlencode({'resumptionToken':resumptionToken})
-                #resumptionToken = 'resumptionToken='+resumptionToken
+                #resumptionToken = urlencode({'resumptionToken':resumptionToken})
+                resumptionToken = 'resumptionToken='+resumptionToken
                 # Ideally this should be handled more smooth
-                resumptionTokenSpecialTreatment = ['geonetwork', 'eu-interact', 'nilu']
+                resumptionTokenSpecialTreatment = ['geonetwork', 'eu-interact', 'nilu', 'nipr']
                 #if 'geonetwork' in baseURL:
                 if '?' in baseURL:
                     '''
