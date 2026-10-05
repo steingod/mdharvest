@@ -17,6 +17,7 @@ RI = {'AWIPEV Base' : {'kw' : ['AWIPEV'],  'resource': 'https://www.awipev.eu/',
       'Lönnstorp Research Station':  { 'kw' : ['Lönnstorp Research Station'], 'resource': 'https://meta.fieldsites.se/resources/stations/Lonnstorp', 'polarin': False},
       'Grimsö Wildlife Research Station':  { 'kw' : ['Grimsö Wildlife Research Station'], 'resource': 'https://meta.fieldsites.se/resources/stations/Grimso', 'polarin': False},
       'Bolmen Research Station':  { 'kw' : ['Bolmen Research Station'], 'resource': 'https://meta.fieldsites.se/resources/stations/bolmen', 'polarin': False},
-      'Erken Laboratory':  { 'kw' : ['Erken Laboratory'], 'resource': 'https://meta.fieldsites.se/resources/stations/Erken', 'polarin': False}
+      'Erken Laboratory':  { 'kw' : ['Erken Laboratory'], 'resource': 'https://meta.fieldsites.se/resources/stations/Erken', 'polarin': False},
+      'Kevo Research Station': {'kv': ['Kevo Research Station'], 'resource': 'https://sites.utu.fi/kevo/en/', 'polarin': True}
       #'':  { 'kw' : [''], 'resource': '', 'polarin': False}
       }
